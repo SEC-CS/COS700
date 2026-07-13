@@ -1,0 +1,10 @@
+set.mm
+proof_steps.jsonl
+training.txt
+test.jsonl
+test_training.txt
+train.jsonl
+train_training.txt
+valid.jsonl
+valid_training.txt
+/__pycache__
