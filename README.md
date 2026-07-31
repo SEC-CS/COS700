@@ -14,3 +14,12 @@
 2. Split the data with [data/train_valid_test.py](data/train_valid_test.py).
 3. Train with [finetuning/scripts/train_model.py](finetuning/scripts/train_model.py).
 4. Run inference with [model.py](model.py) and [proof_search.py](proof_search.py).
+
+## proof_lengths.py output
+Sampled 50000 examples from train.jsonl
+  min    : 19
+  median : 274
+  p90    : 738
+  p95    : 966
+  p99    : 1525
+  max    : 8359
