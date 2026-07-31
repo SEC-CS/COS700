@@ -1,11 +1,15 @@
 import json
 import random
 from collections import defaultdict
+from pathlib import Path
+
+DATA_DIR = Path(__file__).resolve().parents[1] / 'data'
+PROOF_STEPS_PATH = DATA_DIR / 'proof_steps.jsonl'
 
 # --- Load all proof steps and group by theorem ---
 theorem_steps = defaultdict(list)
 
-with open('proof_steps.jsonl') as f:
+with open(PROOF_STEPS_PATH) as f:
     for line in f:
         record = json.loads(line)
         theorem_steps[record['proof_label']].append(line)
@@ -45,8 +49,8 @@ splits = {
 
 file_handles = {
     split: {
-        'jsonl':    open(f'{split}.jsonl', 'w'),
-        'training': open(f'{split}_training.txt', 'w'),
+        'jsonl':    open(DATA_DIR / f'{split}.jsonl', 'w'),
+        'training': open(DATA_DIR / f'{split}_training.txt', 'w'),
     }
     for split in splits
 }
