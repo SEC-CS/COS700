@@ -463,15 +463,21 @@ def proof_search(
         priority=0.0, cumulative_logprob=0.0, goal_str=root_goal_str))
     in_queue = {root_goal_str}
 
-    def is_proved(goal: str) -> bool:
+    def is_proved(goal: str, visiting: set = None) -> bool:
+        if visiting is None:
+            visiting = set()
         if goal in closed:
             return True
         if goal not in proof_tree:
             return False
-        if all(is_proved(sg) for sg in proof_tree[goal]['subgoals']):
+        if goal in visiting:
+            return False  # cycle — can't prove a goal via itself
+        visiting.add(goal)
+        result = all(is_proved(sg, visiting) for sg in proof_tree[goal]['subgoals'])
+        visiting.discard(goal)
+        if result:
             closed.add(goal)
-            return True
-        return False
+        return result
 
     while heap and expansions < max_expansions:
         entry    = heapq.heappop(heap)
