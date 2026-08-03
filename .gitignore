@@ -8,3 +8,4 @@ train_training.txt
 valid.jsonl
 valid_training.txt
 /__pycache__
+/finetuning/output
