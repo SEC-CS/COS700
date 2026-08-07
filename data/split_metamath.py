@@ -7,7 +7,9 @@ def split_by_headings(filepath, output_dir):
         content = f.read()
 
     # Pattern matches the ###\ntext\n### heading blocks
-    heading_pattern = re.compile(r"^(#{3,})\s*\n\s*(.+?)\s*\n\s*#{3,}", re.MULTILINE)
+    heading_pattern = re.compile(
+        r"^\$\(\n(#{3,})\s*\n\s*(.+?)\s*\n\s*#{3,}", re.MULTILINE
+    )
 
     matches = list(heading_pattern.finditer(content))
 
@@ -30,7 +32,7 @@ def split_by_headings(filepath, output_dir):
 
         # Build the new file: heading + body
         heading_full = match.group(0)
-        output_path = f"{output_dir}/{i+1:02d}_{safe_title}.txt"
+        output_path = f"{output_dir}/{i+1:02d}_{safe_title}.mm"
 
         with open(output_path, "w", encoding="utf-8") as out:
             out.write(heading_full + "\n")
@@ -39,6 +41,10 @@ def split_by_headings(filepath, output_dir):
         print(f"Created: {output_path}")
 
     print(f"\nSplit into {len(matches)} files.")
+
+
+def get_theorem_names(mmfile: str) -> list[str]:
+    pass
 
 
 if __name__ == "__main__":
