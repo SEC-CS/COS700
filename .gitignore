@@ -7,5 +7,5 @@ train.jsonl
 train_training.txt
 valid.jsonl
 valid_training.txt
-/__pycache__
+**/__pycache__
 /finetuning/output
