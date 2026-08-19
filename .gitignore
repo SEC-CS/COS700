@@ -9,3 +9,4 @@ valid.jsonl
 valid_training.txt
 **/__pycache__
 /finetuning/output
+**/.venv

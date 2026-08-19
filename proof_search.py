@@ -462,6 +462,7 @@ def proof_search(
     n_tactics:      int   = 32,
     temperature:    float = 1.0,
     verbose:        bool  = False,
+    demo:           bool  = False,
 ) -> tuple[Optional[dict], dict]:
     """
     Run a proof search for a single goal.
@@ -520,20 +521,37 @@ def proof_search(
             print(f"\n[Expansion {expansions}/{max_expansions}] "
                   f"logprob={entry.cumulative_logprob:.2f}")
             print(f"  Goal: {goal_str[:100]}")
+        if demo:
+            print(f"\n=== Expansion {expansions}/{max_expansions} "
+                  f"(logprob={entry.cumulative_logprob:.2f}) ===")
+            print(f"Goal: {goal_str}")
 
         candidates = model.generate_steps(
             goal_str, n=n_tactics, temperature=temperature)
+        if demo:
+            print(f"  {len(candidates)} candidate tactic(s) to try:")
 
         for step_str, step_logprob in candidates:
             candidates_examined += 1
+            if demo:
+                print(f"  Trying: {step_str}  (logprob={step_logprob:.2f})")
             subgoals = verifier.apply_step(goal_str, step_str)
 
             if subgoals is None:
+                if demo:
+                    print(f"    -> invalid")
                 continue
 
             valid_tactics_found += 1
             if verbose:
                 print(f"  Valid tactic. Subgoals: {len(subgoals)}")
+            if demo:
+                if subgoals:
+                    print(f"    -> valid, {len(subgoals)} new subgoal(s):")
+                    for sg in subgoals:
+                        print(f"         {sg}")
+                else:
+                    print(f"    -> valid, no subgoals remaining (closed)")
 
             proof_tree[goal_str] = {'step': step_str, 'subgoals': subgoals}
 
@@ -553,6 +571,8 @@ def proof_search(
                 closed.add(goal_str)
 
             if is_proved(root_goal_str):
+                if demo:
+                    print(f"\nRoot goal proved after {expansions} expansion(s).")
                 elapsed = time.time() - start_time
                 metrics = {
                     'expansions':           expansions,
@@ -615,6 +635,7 @@ def evaluate(
     n_tactics:       int  = 32,
     hard_only:       bool = False,
     verbose:         bool = False,
+    demo:            bool = False,
 ) -> tuple[dict, list[TheoremResult]]:
     """
     Evaluate the prover on a split and collect all metrics.
@@ -678,6 +699,7 @@ def evaluate(
                 max_expansions=max_expansions,
                 n_tactics=n_tactics,
                 verbose=verbose,
+                demo=demo,
             )
 
             total_time       += metrics['search_time_s']
@@ -774,6 +796,7 @@ def run_comparison(
     max_expansions: int  = 128,
     n_tactics:      int  = 32,
     verbose:        bool = False,
+    demo:           bool = False,
 ):
     """
     Evaluate multiple models on the same split and print a comparison table.
@@ -797,6 +820,7 @@ def run_comparison(
             max_expansions=max_expansions,
             n_tactics=n_tactics,
             verbose=verbose,
+            demo=demo,
         )
         all_summaries.append(summary)
 
@@ -870,6 +894,9 @@ def main():
     parser.add_argument('--output',       default=None,
                         help='CSV file to write comparison results')
     parser.add_argument('--verbose',      action='store_true')
+    parser.add_argument('--demo',         action='store_true',
+                        help='Print each candidate tactic tried and the '
+                             'resulting subgoals in full, for live demos')
     args = parser.parse_args()
 
     if not args.stub and not args.baseline and not args.model_module:
@@ -924,6 +951,7 @@ def main():
             max_expansions=args.expansions,
             n_tactics=args.tactics,
             verbose=args.verbose,
+            demo=args.demo,
         )
 
         if proof_tree:
@@ -950,6 +978,7 @@ def main():
                 max_expansions=args.expansions,
                 n_tactics=args.tactics,
                 verbose=args.verbose,
+                demo=args.demo,
             )
         else:
             # Single model evaluation
@@ -964,6 +993,7 @@ def main():
                 n_tactics=args.tactics,
                 hard_only=args.hard_only,
                 verbose=args.verbose,
+                demo=args.demo,
             )
 
 
