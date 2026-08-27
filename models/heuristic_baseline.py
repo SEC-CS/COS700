@@ -2,6 +2,11 @@ import json
 import random
 from utils.formatting import parse_goal,  format_proofstep
 
+# Set this to True to rank candidates by training-data usage frequency
+# instead of random shuffling. Requires PATH to point at data.
+USE_FREQUENCY   = True
+PATH = "data/train.jsonl"
+
 class Model:
     """
     Uninformed baseline that proposes proof steps without any learning.
@@ -11,10 +16,12 @@ class Model:
 
     1. Random sampling: randomly select theorems from the database and
        try trivial identity substitutions. No knowledge of the goal is used.
+       Set USE_FREQUENCY = False
 
     2. Frequency heuristic: prefer theorems that appear most often in the
        training data (more frequently used theorems are more likely to be
        applicable). This is a weak signal but requires no learning.
+       Set USE_FREQUENCY = True
 
     Because this model does not learn from data, it establishes the floor
     performance achievable without machine learning. Any learned model that
@@ -23,13 +30,27 @@ class Model:
     The log probability returned is always 0.0 (uniform) since this model
     has no confidence signal — all candidates are equally (un)informed.
 
-    uv run python proof_search.py --mm data/set.mm --eval data/valid.jsonl --model models/heuristic_baseline.py
+    Before running take note of:
+        1. This model is fully deterministic (log_prob always 0.0, no
+           temperature effect on candidate selection) — so evaluate() can
+           skip retry attempts entirely. 
+           So use --attempts 1 flag
+        2. Set USE_FREQUENCY above for random sampling/frequency heuristic
+        3. Set PATH above to match the --eval flag
+
+        uv run python proof_search.py --mm data/set.mm --eval data/valid.jsonl --demo --model-module models/heuristic_baseline.py --model-name heuristic_baseline --attempts 1
+
     """
 
-    def __init__(self, theorem_frequencies: dict = None):
+    def __init__(self):
         self.mm = None
         self.candidate_labels = []
-        self.theorem_frequencies = theorem_frequencies
+
+        if USE_FREQUENCY:
+            print(f"Computing theorem frequencies from {PATH} ...")
+            self.theorem_frequencies = count_theorem_frequencies(PATH)
+        else:
+            self.theorem_frequencies = None
 
     def set_mm(self, mm):
         """
@@ -70,7 +91,7 @@ class Model:
         conclusion = goal['conclusion']
         candidates = []
 
-        for label in self.candidate_labels[:n * 10]:  # oversample, filter down
+        for label in self.candidate_labels[:n * 10]:  
             if len(candidates) >= n:
                 break
 
@@ -81,20 +102,12 @@ class Model:
 
                 _, mand_var, hyp, result = data
 
-                # Try identity substitution: each variable maps to itself.
-                # This only produces a *valid* step when the theorem's own
-                # conclusion, unsubstituted, already equals the goal — but
-                # it costs nothing to try and occasionally succeeds.
                 subst = {v: [v] for _, v in mand_var}
 
                 substituted = self.mm.apply_subst(result, subst)
                 if substituted != conclusion:
                     continue
 
-                # Build the proofstep string: just the applied theorem's
-                # label plus its substitution. Subgoals are no longer
-                # part of the string — the verifier derives them from
-                # the theorem's own hypotheses.
                 step_str = format_proofstep(label, subst)
                 candidates.append((step_str, 0.0))
 
@@ -103,24 +116,15 @@ class Model:
 
         return candidates
 
-
-# ---------------------------------------------------------------------------
-# Theorem frequency counter (used to initialise the baseline)
-# ---------------------------------------------------------------------------
-
 def count_theorem_frequencies(train_jsonl: str) -> dict:
     """
     Count how many times each theorem label appears as an applied step
     in the training data.
 
-    Used to initialise the frequency heuristic in HeuristicBaselineModel.
+    Used to initialise the frequency heuristic in the Model.
     More frequent theorems are tried first on the assumption that commonly
     used theorems are more likely to be applicable to any given goal.
 
-    The new data format records the applied theorem directly in the
-    'theorem' field of every step, so we no longer need to use
-    'proof_label' (the theorem being *proved*) as an indirect proxy for
-    it — we can count the actually-applied label exactly.
     """
     from collections import Counter
     counts = Counter()

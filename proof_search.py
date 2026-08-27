@@ -243,18 +243,14 @@ def proof_search(
             continue
 
         expansions += 1
-        if verbose:
-            print(f"\n[Expansion {expansions}/{max_expansions}] "
-                  f"logprob={entry.cumulative_logprob:.2f}")
-            print(f"  Goal: {goal_str[:100]}")
-        if demo:
-            print(f"\n=== Expansion {expansions}/{max_expansions} "
-                  f"(logprob={entry.cumulative_logprob:.2f}) ===")
-            print(f"Goal: {goal_str}")
 
         candidates = model.generate_steps(
             goal_str, n=n_tactics, temperature=temperature)
-        if demo:
+
+        if demo and len(candidates) != 0:
+            print(f"\n=== Expansion {expansions}/{max_expansions} "
+                  f"(logprob={entry.cumulative_logprob:.2f}) ===")
+            print(f"Goal: {goal_str}")
             print(f"  {len(candidates)} candidate tactic(s) to try:")
 
         for step_str, step_logprob in candidates:
@@ -309,7 +305,7 @@ def proof_search(
                 }
                 return proof_tree, metrics
 
-            break  # one valid tactic per expansion
+            break  
 
     elapsed = time.time() - start_time
     metrics = {
