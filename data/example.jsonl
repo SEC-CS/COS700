@@ -1,5 +1,0 @@
-{"proof_label": "id", "goal": "[[ ]] |- ( A -> ( A -> A ) )", "theorem": "ax-1", "substitution": {"A": ["A"], "B": ["A"]}}
-{"proof_label": "id", "goal": "[[ ]] |- ( A -> ( ( A -> A ) -> A ) )", "theorem": "ax-1", "substitution": {"A": ["A"], "B": ["(", "A", "->", "A", ")"]}}
-{"proof_label": "id", "goal": "[[ ]] |- ( ( A -> ( ( A -> A ) -> A ) ) -> ( ( A -> ( A -> A ) ) -> ( A -> A ) ) )", "theorem": "ax-2", "substitution": {"A": ["A"], "B": ["(", "A", "->", "A", ")"], "C": ["A"]}}
-{"proof_label": "id", "goal": "[[ ]] |- ( ( A -> ( A -> A ) ) -> ( A -> A ) )", "theorem": "ax-mp", "substitution": {"A": ["(", "A", "->", "(", "(", "A", "->", "A", ")", "->", "A", ")", ")"], "B": ["(", "(", "A", "->", "(", "A", "->", "A", ")", ")", "->", "(", "A", "->", "A", ")", ")"]}}
-{"proof_label": "id", "goal": "[[ ]] |- ( A -> A )", "theorem": "ax-mp", "substitution": {"A": ["(", "A", "->", "(", "A", "->", "A", ")", ")"], "B": ["(", "A", "->", "A", ")"]}}

@@ -27,36 +27,15 @@ To plug in a model, create a Python file defining a class called 'Model':
               proofstep_string format:
                 "theorem_label {{ var1 : val1 }} {{ var2 : val2 }} ..."
 
-              i.e. the model predicts WHICH theorem/axiom is being applied
-              and the substitution for its mandatory variables. It no
-              longer predicts the conclusion or the resulting subgoals —
-              those are derived deterministically by the verifier from
-              the theorem's own statement plus the predicted substitution.
-
               log_probability: float, more negative = less confident.
             \"""
 
-Three model types are planned:
-  1. Fine-tuned pre-trained language model (e.g. Mistral, LLaMA)
-  2. Distilled smaller model trained from the fine-tuned model
-  3. Custom neural network architecture built from scratch
-
-All three slot in without changing anything in this file.
-
-A heuristic baseline model is included here for comparison.
-
 Usage:
-  # Test infrastructure only (no model)
-  uv run python proof_search.py --mm data/set.mm --goal "|- ( ph -> ph )" --stub
-
-  # Run heuristic baseline
-  uv run python proof_search.py --mm data/set.mm --eval data/valid.jsonl --baseline
-
-  # Run a learned model
+  # Run a fine-tuned model
   uv run python proof_search.py --mm data/set.mm --eval data/valid.jsonl --model-module my_model.py
 
-  # Compare all available models and write results to CSV
-  uv run python proof_search.py --mm set.mm --eval data/valid.jsonl --baseline --compare-all --output results.csv
+  # Run a fine-tuned model in demo mode
+  uv run python proof_search.py --demo --mm data/set.mm --eval data/valid.jsonl --model-module my_model.py
 
   # Evaluate on harder theorems only (last 20% of split by position)
   uv run python proof_search.py --mm data/set.mm --eval data/valid.jsonl --model-module my_model.py --hard-only
@@ -65,8 +44,6 @@ Usage:
 import heapq
 import json
 import time
-import csv
-import random
 import argparse
 import sys
 import itertools
@@ -74,11 +51,7 @@ import importlib.util
 import os
 from dataclasses import dataclass, field
 from typing import Optional
-
-
-# ---------------------------------------------------------------------------
-# Load mmverify
-# ---------------------------------------------------------------------------
+from utils.formatting import parse_goal, parse_proofstep, format_goal
 
 def load_mmverify(path: str):
     """Load mmverify.py as a module from a file path."""
@@ -88,164 +61,7 @@ def load_mmverify(path: str):
     mod.verbosity = 0
     return mod
 
-
-# ---------------------------------------------------------------------------
-# Stub model — tests infrastructure without any model
-# ---------------------------------------------------------------------------
-
-class StubModel:
-    """
-    Placeholder that always returns no candidates.
-
-    Used to confirm the infrastructure (loading, parsing, queue, verifier)
-    all work correctly before any model exists. Every proof search will
-    fail (correctly) because no tactics are ever proposed.
-    """
-
-    def generate_steps(self, goal_str, n=32, temperature=1.0):
-        print(f"    [StubModel] Would generate {n} candidates for:")
-        print(f"    {goal_str[:100]}")
-        return []
-
-
-# ---------------------------------------------------------------------------
-# Heuristic baseline model
-# ---------------------------------------------------------------------------
-
-class HeuristicBaselineModel:
-    """
-    Uninformed baseline that proposes proof steps without any learning.
-
-    This is the comparison point against which all learned models are
-    evaluated. It uses two simple heuristics:
-
-    1. Random sampling: randomly select theorems from the database and
-       try trivial identity substitutions. No knowledge of the goal is used.
-
-    2. Frequency heuristic: prefer theorems that appear most often in the
-       training data (more frequently used theorems are more likely to be
-       applicable). This is a weak signal but requires no learning.
-
-    Because this model does not learn from data, it establishes the floor
-    performance achievable without machine learning. Any learned model that
-    cannot beat this baseline is not adding value.
-
-    The log probability returned is always 0.0 (uniform) since this model
-    has no confidence signal — all candidates are equally (un)informed.
-    """
-
-    def __init__(self, mm, theorem_frequencies: dict = None):
-        """
-        mm: the loaded mmverify MM database
-        theorem_frequencies: optional dict of {label: count} from training data.
-                             If provided, more frequent theorems are tried first.
-                             If None, theorems are sampled randomly.
-        """
-        self.mm = mm
-
-        # Collect all axioms and proven theorems as candidate labels
-        self.candidate_labels = [
-            label for label, (kind, _) in mm.labels.items()
-            if kind in ('$a', '$p')
-        ]
-
-        if theorem_frequencies:
-            # Sort by frequency descending so common theorems come first
-            self.candidate_labels.sort(
-                key=lambda l: theorem_frequencies.get(l, 0),
-                reverse=True
-            )
-        else:
-            random.shuffle(self.candidate_labels)
-
-        self.theorem_frequencies = theorem_frequencies
-
-    def generate_steps(self, goal_str, n=32, temperature=1.0):
-        """
-        Generate n candidate proof steps using heuristics only.
-
-        Strategy: for each candidate theorem, attempt to build a trivial
-        substitution where each variable maps to itself. This will only
-        work for theorems whose conclusion already matches the goal
-        without non-trivial substitutions — but it costs nothing to try
-        and occasionally succeeds on simple goals.
-
-        Returns candidates as (proofstep_string, log_prob) tuples
-        with uniform log_prob=0.0 since no confidence signal exists.
-        """
-        goal = _parse_goal(goal_str)
-        if goal is None:
-            return []
-
-        conclusion = goal['conclusion']
-        candidates = []
-
-        for label in self.candidate_labels[:n * 10]:  # oversample, filter down
-            if len(candidates) >= n:
-                break
-
-            try:
-                kind, data = self.mm.labels[label]
-                if kind not in ('$a', '$p'):
-                    continue
-
-                _, mand_var, hyp, result = data
-
-                # Try identity substitution: each variable maps to itself.
-                # This only produces a *valid* step when the theorem's own
-                # conclusion, unsubstituted, already equals the goal — but
-                # it costs nothing to try and occasionally succeeds.
-                subst = {v: [v] for _, v in mand_var}
-
-                substituted = self.mm.apply_subst(result, subst)
-                if substituted != conclusion:
-                    continue
-
-                # Build the proofstep string: just the applied theorem's
-                # label plus its substitution. Subgoals are no longer
-                # part of the string — the verifier derives them from
-                # the theorem's own hypotheses.
-                step_str = _format_proofstep(label, subst)
-                candidates.append((step_str, 0.0))
-
-            except Exception:
-                continue
-
-        return candidates
-
-
-# ---------------------------------------------------------------------------
-# Theorem frequency counter (used to initialise the baseline)
-# ---------------------------------------------------------------------------
-
-def count_theorem_frequencies(train_jsonl: str) -> dict:
-    """
-    Count how many times each theorem label appears as an applied step
-    in the training data.
-
-    Used to initialise the frequency heuristic in HeuristicBaselineModel.
-    More frequent theorems are tried first on the assumption that commonly
-    used theorems are more likely to be applicable to any given goal.
-
-    The new data format records the applied theorem directly in the
-    'theorem' field of every step, so we no longer need to use
-    'proof_label' (the theorem being *proved*) as an indirect proxy for
-    it — we can count the actually-applied label exactly.
-    """
-    from collections import Counter
-    counts = Counter()
-    with open(train_jsonl) as f:
-        for line in f:
-            record = json.loads(line)
-            counts[record['theorem']] += 1
-    return dict(counts)
-
-
-# ---------------------------------------------------------------------------
-# Model loader
-# ---------------------------------------------------------------------------
-
-def load_model_from_module(module_path: str):
+def load_model_from_module(module_path: str, mm):
     """
     Load a model from an external Python file.
 
@@ -263,13 +79,11 @@ def load_model_from_module(module_path: str):
 
     print(f"Loading model from {module_path} ...")
     model = mod.Model()
+    if hasattr(model, "set_mm"):
+        model.set_mm(mm)
     print("Model loaded.")
     return model
 
-
-# ---------------------------------------------------------------------------
-# Metamath verifier wrapper
-# ---------------------------------------------------------------------------
 
 class MetamathVerifier:
     """
@@ -288,26 +102,10 @@ class MetamathVerifier:
         """
         Validate a proof step against a goal.
 
-        The model now predicts the theorem/axiom label directly (instead
-        of a conclusion string that had to be matched back to a label by
-        brute-force search), so this method just looks the label up and
-        checks the predicted substitution. That means:
-
-          1. O(1) label lookup instead of an O(#labels) scan through the
-             whole database (that scan was _find_applied_label, which no
-             longer exists).
-          2. A step is now only "wrong" for wrong reasons — bad label,
-             incomplete substitution, disjointness violation, or the
-             substituted result not matching the goal — never because
-             two different theorems happen to produce the same
-             conclusion string for some substitution (which could make
-             the old brute-force matcher pick the "wrong" theorem, e.g.
-             one whose hypotheses don't lead anywhere useful).
-
         Returns new subgoal strings if valid, None if invalid.
         """
-        goal = _parse_goal(goal_str)
-        step = _parse_proofstep(proofstep_str)
+        goal = parse_goal(goal_str)
+        step = parse_proofstep(proofstep_str)
 
         if goal is None or step is None:
             return None
@@ -335,9 +133,6 @@ class MetamathVerifier:
 
             # The applied theorem's own conclusion, under the predicted
             # substitution, must equal the current goal's conclusion.
-            # This is the check that used to be done "in reverse" by
-            # _find_applied_label (searching for a label whose result
-            # matches); now it's a single direct comparison.
             substituted_result = self.mm.apply_subst(result, subst)
             if substituted_result != goal['conclusion']:
                 return None
@@ -367,7 +162,7 @@ class MetamathVerifier:
             new_subgoals = []
             for h in hyp:
                 subgoal_tokens = self.mm.apply_subst(h, subst)
-                subgoal_str    = _format_goal(
+                subgoal_str    = format_goal(
                     goal['e_hyps'], subgoal_tokens)
                 new_subgoals.append(subgoal_str)
 
@@ -377,70 +172,6 @@ class MetamathVerifier:
             return None
 
 
-# ---------------------------------------------------------------------------
-# Formatting helpers (shared between verifier, baseline, and search)
-# ---------------------------------------------------------------------------
-
-def _parse_goal(goal_str: str) -> Optional[dict]:
-    try:
-        inner_start = goal_str.index('[[') + 2
-        inner_end   = goal_str.index(']]')
-        hyp_block   = goal_str[inner_start:inner_end].strip()
-        conc_block  = goal_str[inner_end + 2:].strip()
-        e_hyps = ([h.strip().split() for h in hyp_block.split('   ')
-                   if h.strip()] if hyp_block else [])
-        return {'e_hyps': e_hyps, 'conclusion': conc_block.split()}
-    except Exception:
-        return None
-
-
-def _parse_proofstep(step_str: str) -> Optional[dict]:
-    """
-    Parse a proofstep string of the form:
-        "theorem_label {{ var1 : val1 }} {{ var2 : val2 }} ..."
-
-    Unlike the old format, there is no "[[ ... ]] conclusion" block here —
-    the model predicts the applied theorem's label directly rather than
-    the resulting conclusion string, so there's nothing to re-derive the
-    label from.
-    """
-    try:
-        subst = {}
-        s = step_str
-        while '{{' in s:
-            start     = s.index('{{')
-            end       = s.index('}}', start)
-            subst_str = s[start + 2:end].strip()
-            colon     = subst_str.index(':')
-            var       = subst_str[:colon].strip()
-            val       = subst_str[colon + 1:].strip().split()
-            subst[var] = val
-            s = s[:start] + s[end + 2:]
-        s = s.strip()
-        label_toks = s.split()
-        if len(label_toks) != 1:
-            return None  # exactly one token should remain: the label
-        return {'theorem': label_toks[0], 'subst': subst}
-    except Exception:
-        return None
-
-
-def _format_goal(e_hyps: list, conclusion: list) -> str:
-    if e_hyps:
-        return f"[[ {'   '.join(' '.join(h) for h in e_hyps)} ]] {' '.join(conclusion)}"
-    return f"[[ ]] {' '.join(conclusion)}"
-
-
-def _format_proofstep(theorem_label: str, subst: dict) -> str:
-    subst_str = ' '.join(f"{{{{ {v} : {' '.join(val)} }}}}"
-                         for v, val in sorted(subst.items()) if val)
-    return f"{theorem_label}" + (f" {subst_str}" if subst_str else "")
-
-
-# ---------------------------------------------------------------------------
-# Priority queue entry
-# ---------------------------------------------------------------------------
-
 @dataclass(order=True)
 class GoalEntry:
     priority:           float
@@ -448,11 +179,6 @@ class GoalEntry:
     goal_str:           str           = field(compare=False)
     parent_goal:        Optional[str] = field(compare=False, default=None)
     applied_step:       Optional[str] = field(compare=False, default=None)
-
-
-# ---------------------------------------------------------------------------
-# Proof search — returns result dict AND metrics
-# ---------------------------------------------------------------------------
 
 def proof_search(
     root_goal_str:  str,
@@ -462,6 +188,7 @@ def proof_search(
     n_tactics:      int   = 32,
     temperature:    float = 1.0,
     verbose:        bool  = False,
+    demo:           bool  = False,
 ) -> tuple[Optional[dict], dict]:
     """
     Run a proof search for a single goal.
@@ -516,24 +243,37 @@ def proof_search(
             continue
 
         expansions += 1
-        if verbose:
-            print(f"\n[Expansion {expansions}/{max_expansions}] "
-                  f"logprob={entry.cumulative_logprob:.2f}")
-            print(f"  Goal: {goal_str[:100]}")
 
         candidates = model.generate_steps(
             goal_str, n=n_tactics, temperature=temperature)
 
+        if demo and len(candidates) != 0:
+            print(f"\n=== Expansion {expansions}/{max_expansions} "
+                  f"(logprob={entry.cumulative_logprob:.2f}) ===")
+            print(f"Goal: {goal_str}")
+            print(f"  {len(candidates)} candidate tactic(s) to try:")
+
         for step_str, step_logprob in candidates:
             candidates_examined += 1
+            if demo:
+                print(f"  Trying: {step_str}  (logprob={step_logprob:.2f})")
             subgoals = verifier.apply_step(goal_str, step_str)
 
             if subgoals is None:
+                if demo:
+                    print(f"    -> invalid")
                 continue
 
             valid_tactics_found += 1
             if verbose:
                 print(f"  Valid tactic. Subgoals: {len(subgoals)}")
+            if demo:
+                if subgoals:
+                    print(f"    -> valid, {len(subgoals)} new subgoal(s):")
+                    for sg in subgoals:
+                        print(f"         {sg}")
+                else:
+                    print(f"    -> valid, no subgoals remaining (closed)")
 
             proof_tree[goal_str] = {'step': step_str, 'subgoals': subgoals}
 
@@ -553,6 +293,8 @@ def proof_search(
                 closed.add(goal_str)
 
             if is_proved(root_goal_str):
+                if demo:
+                    print(f"\nRoot goal proved after {expansions} expansion(s).")
                 elapsed = time.time() - start_time
                 metrics = {
                     'expansions':           expansions,
@@ -563,7 +305,7 @@ def proof_search(
                 }
                 return proof_tree, metrics
 
-            break  # one valid tactic per expansion
+            break  
 
     elapsed = time.time() - start_time
     metrics = {
@@ -576,9 +318,6 @@ def proof_search(
     return None, metrics
 
 
-# ---------------------------------------------------------------------------
-# Proof length counter
-# ---------------------------------------------------------------------------
 
 def count_proof_steps(proof_tree: dict) -> int:
     """Count the total number of steps in a completed proof tree."""
@@ -587,21 +326,17 @@ def count_proof_steps(proof_tree: dict) -> int:
     return sum(1 + len(v['subgoals']) for v in proof_tree.values())
 
 
-# ---------------------------------------------------------------------------
-# Evaluation with full metrics
-# ---------------------------------------------------------------------------
-
 @dataclass
 class TheoremResult:
     """All measurements for one theorem across all attempts."""
     label:                  str
     proved:                 bool
-    best_search_time_s:     float   # fastest successful attempt (or last attempt)
-    total_search_time_s:    float   # sum across all attempts
-    total_expansions:       int     # sum across all attempts
-    total_candidates:       int     # total tactics passed to verifier
-    proof_steps:            int     # steps in the found proof (0 if not proved)
-    attempts_used:          int     # how many attempts before success (or max)
+    best_search_time_s:     float   
+    total_search_time_s:    float   
+    total_expansions:       int     
+    total_candidates:       int     
+    proof_steps:            int     
+    attempts_used:          int     
     difficulty_rank:        float   # 0.0 = easiest, 1.0 = hardest (by position)
 
 
@@ -615,6 +350,7 @@ def evaluate(
     n_tactics:       int  = 32,
     hard_only:       bool = False,
     verbose:         bool = False,
+    demo:            bool = False,
 ) -> tuple[dict, list[TheoremResult]]:
     """
     Evaluate the prover on a split and collect all metrics.
@@ -622,7 +358,6 @@ def evaluate(
     Parameters
     ----------
     hard_only: if True, evaluate only on the hardest 20% of theorems
-               (those appearing latest in the file, i.e. most complex).
                Used for the scalability metric.
 
     Returns
@@ -632,9 +367,8 @@ def evaluate(
     summary: aggregated metrics dict
     results: per-theorem TheoremResult list
     """
-    # --- Load theorems ---
-    theorem_goals = {}   # label -> root goal string
-    theorem_order = []   # labels in file order (proxy for difficulty)
+    theorem_goals = {}   
+    theorem_order = []   
 
     with open(split_file) as f:
         for line in f:
@@ -669,7 +403,7 @@ def evaluate(
         proof_steps       = 0
         attempts_used     = 0
 
-        for attempt in range(attempts):
+        for _ in range(attempts):
             attempts_used += 1
             proof_tree, metrics = proof_search(
                 root_goal_str=root_goal,
@@ -678,6 +412,7 @@ def evaluate(
                 max_expansions=max_expansions,
                 n_tactics=n_tactics,
                 verbose=verbose,
+                demo=demo,
             )
 
             total_time       += metrics['search_time_s']
@@ -693,7 +428,7 @@ def evaluate(
         if proved:
             proved_count += 1
         if best_time == float('inf'):
-            best_time = total_time  # use total if never proved
+            best_time = total_time  
 
         results.append(TheoremResult(
             label               = label,
@@ -713,7 +448,6 @@ def evaluate(
             print(f"  [{i+1}/{total}] proved={proved_count} "
                   f"({pct:.1f}%) avg_time={avg_time:.2f}s")
 
-    # --- Aggregate metrics ---
     proved_results   = [r for r in results if r.proved]
     n_proved         = len(proved_results)
     success_rate     = n_proved / total * 100
@@ -729,7 +463,6 @@ def evaluate(
     avg_proof_steps  = (sum(r.proof_steps for r in proved_results)
                         / max(n_proved, 1))
 
-    # Scalability: success rate on hard (top 20% difficulty) theorems
     hard_theorems    = [r for r in results if r.difficulty_rank >= 0.8]
     hard_proved      = sum(1 for r in hard_theorems if r.proved)
     hard_success_rate = (hard_proved / max(len(hard_theorems), 1) * 100)
@@ -760,84 +493,6 @@ def evaluate(
 
     return summary, results
 
-
-# ---------------------------------------------------------------------------
-# Comparison runner
-# ---------------------------------------------------------------------------
-
-def run_comparison(
-    models:         dict,       # {name: model_object}
-    verifier:       MetamathVerifier,
-    split_file:     str,
-    output_csv:     str  = None,
-    attempts:       int  = 4,
-    max_expansions: int  = 128,
-    n_tactics:      int  = 32,
-    verbose:        bool = False,
-):
-    """
-    Evaluate multiple models on the same split and print a comparison table.
-
-    Models are evaluated in the order given. Results are written to a CSV
-    if output_csv is specified.
-
-    Training cost (time and memory) is NOT measured here because the models
-    are loaded already trained — training cost should be recorded separately
-    during the training runs for each model and added to the CSV manually.
-    """
-    all_summaries = []
-
-    for name, model in models.items():
-        summary, _ = evaluate(
-            model=model,
-            verifier=verifier,
-            split_file=split_file,
-            model_name=name,
-            attempts=attempts,
-            max_expansions=max_expansions,
-            n_tactics=n_tactics,
-            verbose=verbose,
-        )
-        all_summaries.append(summary)
-
-    # Print comparison table
-    metrics = [
-        ('theorem_success_rate_%',  'Success rate (%)'),
-        ('avg_search_time_s',       'Avg search time (s)'),
-        ('avg_candidates_examined', 'Avg candidates examined'),
-        ('avg_proof_steps',         'Avg proof steps'),
-        ('hard_theorem_success_%',  'Hard theorem success (%)'),
-    ]
-
-    col_w = 28
-    print(f"\n{'COMPARISON TABLE':=^{col_w * (len(all_summaries) + 1)}}")
-    header = f"{'Metric':<{col_w}}" + ''.join(
-        f"{s['model']:>{col_w}}" for s in all_summaries)
-    print(header)
-    print('-' * len(header))
-
-    for key, display_name in metrics:
-        row = f"{display_name:<{col_w}}"
-        for s in all_summaries:
-            row += f"{str(s.get(key, 'N/A')):>{col_w}}"
-        print(row)
-
-    # Write CSV
-    if output_csv:
-        with open(output_csv, 'w', newline='') as f:
-            fieldnames = list(all_summaries[0].keys())
-            writer = csv.DictWriter(f, fieldnames=fieldnames)
-            writer.writeheader()
-            writer.writerows(all_summaries)
-        print(f"\nResults written to {output_csv}")
-        print("Note: add training_time_s and training_memory_gb columns "
-              "manually from your training run logs.")
-
-
-# ---------------------------------------------------------------------------
-# Main
-# ---------------------------------------------------------------------------
-
 def main():
     parser = argparse.ArgumentParser(
         description='Metamath proof search with full evaluation metrics'
@@ -850,14 +505,8 @@ def main():
                         help='Path to Python file defining Model class')
     parser.add_argument('--model-name',   default='learned_model',
                         help='Display name for the model in results')
-    parser.add_argument('--stub',         action='store_true',
-                        help='Use stub model (infrastructure test only)')
-    parser.add_argument('--baseline',     action='store_true',
-                        help='Run heuristic baseline model')
     parser.add_argument('--train-jsonl',  default=None,
-                        help='Training split for baseline frequency heuristic')
-    parser.add_argument('--compare-all',  action='store_true',
-                        help='Run all available models and print comparison')
+                        help='Training split')
     parser.add_argument('--goal',         default=None,
                         help='Single goal to prove e.g. "|- ( ph -> ph )"')
     parser.add_argument('--eval',         default=None,
@@ -867,20 +516,16 @@ def main():
     parser.add_argument('--tactics',      type=int,  default=32)
     parser.add_argument('--hard-only',    action='store_true',
                         help='Evaluate on hardest 20%% of theorems only')
-    parser.add_argument('--output',       default=None,
-                        help='CSV file to write comparison results')
     parser.add_argument('--verbose',      action='store_true')
+    parser.add_argument('--demo',         action='store_true',
+                        help='Print each candidate tactic tried and the '
+                             'resulting subgoals in full, for live demos')
     args = parser.parse_args()
-
-    if not args.stub and not args.baseline and not args.model_module:
-        print("ERROR: supply one of --stub, --baseline, or --model-module")
-        sys.exit(1)
 
     if not args.goal and not args.eval:
         print("ERROR: supply either --goal or --eval")
         sys.exit(1)
 
-    # --- Load mmverify and database ---
     mmverify_path = args.mmverify or os.path.join(
         os.path.dirname(__file__), 'mmverify.py')
     print(f"Loading mmverify from {mmverify_path} ...")
@@ -894,24 +539,12 @@ def main():
 
     verifier = MetamathVerifier(mmv, mm)
 
-    # --- Build models dict ---
     models = {}
 
-    if args.stub:
-        models['stub'] = StubModel()
-
-    if args.baseline:
-        freqs = None
-        if args.train_jsonl:
-            print("Counting theorem frequencies from training data ...")
-            freqs = count_theorem_frequencies(args.train_jsonl)
-        models['heuristic_baseline'] = HeuristicBaselineModel(mm, freqs)
-
     if args.model_module:
-        learned = load_model_from_module(args.model_module)
+        learned = load_model_from_module(args.model_module, mm)
         models[args.model_name] = learned
 
-    # --- Single goal mode ---
     if args.goal:
         model_name, model = next(iter(models.items()))
         root_goal = f"[[ ]] {args.goal}"
@@ -924,6 +557,7 @@ def main():
             max_expansions=args.expansions,
             n_tactics=args.tactics,
             verbose=args.verbose,
+            demo=args.demo,
         )
 
         if proof_tree:
@@ -938,21 +572,7 @@ def main():
         for k, v in metrics.items():
             print(f"  {k}: {v}")
 
-    # --- Evaluation mode ---
     elif args.eval:
-        if args.compare_all and len(models) > 1:
-            run_comparison(
-                models=models,
-                verifier=verifier,
-                split_file=args.eval,
-                output_csv=args.output,
-                attempts=args.attempts,
-                max_expansions=args.expansions,
-                n_tactics=args.tactics,
-                verbose=args.verbose,
-            )
-        else:
-            # Single model evaluation
             model_name, model = next(iter(models.items()))
             evaluate(
                 model=model,
@@ -964,6 +584,7 @@ def main():
                 n_tactics=args.tactics,
                 hard_only=args.hard_only,
                 verbose=args.verbose,
+                demo=args.demo,
             )
 
 
