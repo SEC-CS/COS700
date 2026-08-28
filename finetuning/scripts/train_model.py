@@ -15,13 +15,25 @@ Expected input format
 ----------------------
 --train / --valid point to JSONL files, one record per proof step:
 
-    {"proof_label": "theoremname",
-     "goal":        "[[ |- ph ]] |- ( ph -> ph )",
-     "proof_step":  "[[ ]] |- ( ph -> ph ) {{ ph : ph }}"}
+    {"proof_label":  "xornan",
+     "goal":         "[[ ]] |- ( ( ph \\/_ ps ) <-> ( ( ph \\/ ps ) /\\ -. ( ph /\\ ps ) ) )",
+     "theorem":      "xor2",
+     "substitution": {"ph": ["ph"], "ps": ["ps"]}}
 
-This matches the exact field names extract_proof_steps.py writes
-(proof_label, goal, proof_step, proof_step_hash, parent_hash) and the
-fields evaluate() in proof_search.py already reads (proof_label, goal).
+i.e. "theorem" is the label of the axiom/theorem applied at this proof
+step, and "substitution" maps its mandatory variables to their
+substituted token lists. This matches the fields extract_proof_steps.py
+actually writes and the fields evaluate() in proof_search.py already
+reads (proof_label, goal).
+
+The training TARGET (the PROOFSTEP text the model has to learn to
+generate) is built from theorem + substitution by format_proofstep()
+below, which mirrors _format_proofstep() in proof_search.py exactly --
+producing "theorem_label {{ var1 : val1 }} {{ var2 : val2 }} ..." --
+since that's the exact string proof_search.py's _parse_proofstep() will
+parse back out of the model's generations at search time. Keep the two
+functions in sync if either changes.
+
 These records need to be split into train/valid/test files first --
 see split_dataset.py -- before pointing --train/--valid at them.
 
@@ -59,6 +71,22 @@ from transformers import (
 PROMPT_TEMPLATE = "GOAL: {goal}\nPROOFSTEP:"
 
 
+def format_proofstep(theorem: str, substitution: dict) -> str:
+    """
+    Build the target PROOFSTEP text from a record's theorem + substitution
+    fields: "theorem_label {{ var1 : val1 }} {{ var2 : val2 }} ...".
+
+    This must stay byte-for-byte in sync with _format_proofstep() in
+    proof_search.py -- that's the function whose *parser* counterpart,
+    _parse_proofstep(), will be run on the model's generations during
+    proof search, so the model needs to be trained on exactly the string
+    shape it will be evaluated against.
+    """
+    subst_str = ' '.join(f"{{{{ {v} : {' '.join(val)} }}}}"
+                          for v, val in sorted(substitution.items()) if val)
+    return f"{theorem}" + (f" {subst_str}" if subst_str else "")
+
+
 # ---------------------------------------------------------------------------
 # Dataset
 # ---------------------------------------------------------------------------
@@ -74,14 +102,22 @@ class ProofStepDataset(Dataset):
                  max_examples: int = None):
         self.examples = []
         with open(jsonl_path) as f:
-            for line in f:
+            for line_no, line in enumerate(f, start=1):
                 if max_examples is not None and len(self.examples) >= max_examples:
                     break
                 line = line.strip()
                 if not line:
                     continue
                 record = json.loads(line)
-                self.examples.append((record["goal"], record["proof_step"]))
+                try:
+                    proof_step = format_proofstep(record["theorem"],
+                                                   record["substitution"])
+                    goal = record["goal"]
+                except KeyError as e:
+                    raise KeyError(
+                        f"{jsonl_path}:{line_no} is missing field {e} -- "
+                    ) from e
+                self.examples.append((goal, proof_step))
         self.tokenizer = tokenizer
         self.max_length = max_length
 
@@ -149,7 +185,9 @@ def main():
                               "set higher than --batch-size without OOM. "
                               "Defaults to --batch-size if unset.")
     parser.add_argument("--grad-accum", type=int, default=8)
-    parser.add_argument("--lr", type=float, default=2e-4)
+    parser.add_argument("--lr", type=float, default=1e-4,
+                         help="Learning rate (default 1e-4 is tuned for "
+                              "small datasets; use 2e-4 for larger datasets)")
     parser.add_argument("--max-length", type=int, default=512)
     parser.add_argument("--eval-steps", type=int, default=1000)
     parser.add_argument("--save-steps", type=int, default=1000)
@@ -167,6 +205,11 @@ def main():
                          default=True, help="Train LoRA adapters (default)")
     parser.add_argument("--no-lora", dest="use_lora", action="store_false",
                          help="Full fine-tune instead of LoRA")
+    parser.add_argument("--lora-rank", type=int, default=8,
+                         help="LoRA rank r (default 8 for small datasets; "
+                              "use 16 for larger datasets)")
+    parser.add_argument("--lora-alpha", type=int, default=16,
+                         help="LoRA alpha scaling (default 16; keep alpha/r ≈ 2)")
     parser.add_argument("--load-in-4bit", action="store_true",
                          help="QLoRA: quantize the base model to 4-bit "
                               "before attaching LoRA adapters")
@@ -244,8 +287,8 @@ def main():
             )
         lora_config = LoraConfig(
             task_type=TaskType.CAUSAL_LM,
-            r=16,
-            lora_alpha=32,
+            r=args.lora_rank,
+            lora_alpha=args.lora_alpha,
             lora_dropout=0.05,
             target_modules=["q_proj", "k_proj", "v_proj", "o_proj",
                              "gate_proj", "up_proj", "down_proj"],

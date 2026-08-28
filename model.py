@@ -19,6 +19,7 @@ Usage:
 """
 
 import os
+import sys
 
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
@@ -28,10 +29,14 @@ MODEL_DIR = os.environ.get("PROVER_MODEL_DIR", "./finetuning/output/finetuned-pr
 
 PROMPT_TEMPLATE = "GOAL: {goal}\nPROOFSTEP:"
 
-# Sub-batch size for generation -- keeps peak memory bounded when n is
-# large (e.g. n=32) instead of generating all candidates in one shot.
-GEN_SUB_BATCH = 8
 MAX_NEW_TOKENS = 128
+
+# Set PROVER_DEBUG_GENLEN=1 to print how many tokens generations are
+# actually using. If the reported max/mean sit well under MAX_NEW_TOKENS,
+# that constant is safe to lower -- every unused token budget is wasted
+# decode steps the whole sub-batch waits on. Off by default: adds a single
+# cheap counter increment per candidate and nothing else.
+_DEBUG_GEN_LEN = os.environ.get("PROVER_DEBUG_GENLEN") == "1"
 
 
 class Model:
@@ -45,6 +50,19 @@ class Model:
             model_dir, torch_dtype=torch.bfloat16
         ).to(self.device)
         self.model.eval()
+
+        # Adaptive generation batch size, shared across calls. We start by
+        # trying to generate all `n` candidates in one generate() call --
+        # one prompt prefill instead of ceil(n/8) of them, plus one set of
+        # CUDA kernel-launch overhead instead of four -- and only shrink it
+        # if that actually overflows VRAM, remembering the smaller size so
+        # we don't rediscover it on every subsequent goal. 
+        self._gen_batch_size = None
+
+        if _DEBUG_GEN_LEN:
+            self._genlen_count = 0
+            self._genlen_sum = 0
+            self._genlen_max = 0
 
     @torch.no_grad()
     def generate_steps(
@@ -61,21 +79,32 @@ class Model:
         # text -> best log-probability seen for that exact string
         candidates: dict[str, float] = {}
 
+        batch_size = self._gen_batch_size or n
         remaining = n
         while remaining > 0:
-            k = min(GEN_SUB_BATCH, remaining)
-            outputs = self.model.generate(
-                **inputs,
-                do_sample=True,
-                temperature=max(temperature, 1e-4),
-                top_p=0.95,
-                num_return_sequences=k,
-                max_new_tokens=MAX_NEW_TOKENS,
-                pad_token_id=self.tokenizer.pad_token_id,
-                eos_token_id=eos_id,
-                output_scores=True,
-                return_dict_in_generate=True,
-            )
+            k = min(batch_size, remaining)
+            try:
+                outputs = self.model.generate(
+                    **inputs,
+                    do_sample=True,
+                    temperature=max(temperature, 1e-4),
+                    top_p=0.95,
+                    num_return_sequences=k,
+                    max_new_tokens=MAX_NEW_TOKENS,
+                    pad_token_id=self.tokenizer.pad_token_id,
+                    eos_token_id=eos_id,
+                    output_scores=True,
+                    return_dict_in_generate=True,
+                )
+            except torch.cuda.OutOfMemoryError:
+                # This batch size doesn't fit in VRAM -- back off, remember
+                # the smaller size for future calls, and retry this chunk.
+                torch.cuda.empty_cache()
+                batch_size = max(1, batch_size // 2)
+                self._gen_batch_size = batch_size
+                continue
+
+            self._gen_batch_size = batch_size
 
             # Per-token log-probabilities for every generated position.
             transition_scores = self.model.compute_transition_scores(
