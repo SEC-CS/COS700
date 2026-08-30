@@ -1,12 +1,10 @@
 #!/usr/bin/env python3
 
+import argparse
 import json
 import random
 from collections import defaultdict
 from pathlib import Path
-
-DATA_DIR = Path(__file__).resolve().parents[1] / "data"
-PROOF_STEPS = DATA_DIR / "proof_steps.jsonl"
 
 
 def format_substitution(substitution):
@@ -48,82 +46,156 @@ def training_example(record):
 # ------------------------------------------------------------
 # Load dataset
 # ------------------------------------------------------------
-theorems = defaultdict(list)
+def load_dataset(filepath: str | Path, verbose=False) -> defaultdict:
+    theorems = defaultdict(list)
 
-with open(PROOF_STEPS, encoding="utf-8") as f:
+    with open(filepath, encoding="utf-8") as f:
 
-    for line in f:
-        record = json.loads(line)
-        # Every proof step belongs to the theorem currently
-        # being proved.
-        theorems[record["proof_label"]].append(record)
+        for line in f:
+            record = json.loads(line)
+            # Every proof step belongs to the theorem currently
+            # being proved.
+            theorems[record["proof_label"]].append(record)
 
-all_theorems = list(theorems)
-num_theorems = len(all_theorems)
-num_steps = sum(len(records) for records in theorems.values())
+    all_theorems = list(theorems)
+    num_steps = sum(len(records) for records in theorems.values())
 
-print(f"Theorems   : {num_theorems:,}")
-print(f"Proof steps: {num_steps:,}")
+    if verbose:
+        print(f"Theorems   : {len(all_theorems):,}")
+        print(f"Proof steps: {num_steps:,}")
+
+    return theorems
+
 
 # ------------------------------------------------------------
 # Build theorem split
 # ------------------------------------------------------------
-random.seed(42)
+def build_theorem_split(
+    theorems: list, percent_valid: int, percent_test: int, verbose=False
+) -> dict[str, set]:
+    assert 0 <= percent_valid <= 100
+    assert 0 <= percent_test <= 100
+    assert percent_valid + percent_test <= 100
 
-NUM_VALID = 1000
-NUM_TEST = 1000
+    random.seed(42)
 
-bucket_size = num_theorems // (NUM_VALID + NUM_TEST)
+    sampled = random.sample(theorems, len(theorems))
 
-buckets = [
-    all_theorems[i * bucket_size : (i + 1) * bucket_size]
-    for i in range(NUM_VALID + NUM_TEST)
-]
+    index_valid = len(theorems) * percent_valid // 100
+    index_test = index_valid + (len(theorems) * percent_test // 100)
 
-sampled = [random.choice(bucket) for bucket in buckets]
+    valid = set(theorems[:index_valid])
+    test = set(sampled[index_valid:index_test])
+    train = set(sampled[index_test:])
 
-valid = set(sampled[:NUM_VALID])
-test = set(sampled[NUM_VALID:])
-train = set(all_theorems) - valid - test
+    if verbose:
+        print("Split")
+        print(f"  Train : {len(train):,}")
+        print(f"  Valid : {len(valid):,}")
+        print(f"  Test  : {len(test):,}")
 
-print()
-print("Split")
-print(f"  Train : {len(train):,}")
-print(f"  Valid : {len(valid):,}")
-print(f"  Test  : {len(test):,}")
+    return {
+        "train": train,
+        "valid": valid,
+        "test": test,
+    }
+
 
 # ------------------------------------------------------------
 # Write datasets
 # ------------------------------------------------------------
-splits = {
-    "train": train,
-    "valid": valid,
-    "test": test,
-}
+def output_to_file(
+    splits: dict[str, set], theorems: defaultdict, output_dir: str | Path, verbose=False
+):
+    step_counts = {}
 
-step_counts = {}
+    for split_name, theorem_names in splits.items():
+        json_path = Path(output_dir) / f"{split_name}.jsonl"
+        train_path = Path(output_dir) / f"{split_name}_training.txt"
 
-for split_name, theorem_set in splits.items():
-    json_path = DATA_DIR / f"{split_name}.jsonl"
-    train_path = DATA_DIR / f"{split_name}_training.txt"
+        count = 0
+        with (
+            open(json_path, "w", encoding="utf-8") as json_out,
+            open(train_path, "w", encoding="utf-8") as train_out,
+        ):
+            for theorem_name in theorem_names:
+                for record in theorems[theorem_name]:
+                    json_out.write(json.dumps(record) + "\n")
+                    train_out.write(training_example(record))
+                    count += 1
+        step_counts[split_name] = count
 
-    count = 0
-    with (
-        open(json_path, "w", encoding="utf-8") as json_out,
-        open(train_path, "w", encoding="utf-8") as train_out,
-    ):
-        for theorem in theorem_set:
-            for record in theorems[theorem]:
-                json_out.write(json.dumps(record) + "\n")
-                train_out.write(training_example(record))
-                count += 1
-    step_counts[split_name] = count
+    if verbose:
+        print()
+        print("Proof steps")
 
-print()
-print("Proof steps")
+    for split in ("train", "valid", "test"):
+        print(f"  {split:5s}: " f"{step_counts[split]:,}")
 
-for split in ("train", "valid", "test"):
-    print(f"  {split:5s}: " f"{step_counts[split]:,}")
+    if verbose:
+        print()
+        print("Finished.")
 
-print()
-print("Finished.")
+
+def main(
+    proof_steps_file: str | Path,
+    output_dir: str | Path,
+    percent_valid: int,
+    percent_test: int,
+    verbose=False,
+) -> None:
+    theorems = load_dataset(proof_steps_file, verbose=verbose)
+    splits = build_theorem_split(
+        theorems=list(theorems.keys()),
+        percent_valid=percent_valid,
+        percent_test=percent_test,
+        verbose=verbose,
+    )
+    output_to_file(
+        splits=splits,
+        theorems=theorems,
+        output_dir=output_dir,
+        verbose=verbose,
+    )
+
+
+if __name__ == "__main__":
+    DATA_DIR = Path(__file__).resolve().parents[1] / "data"
+    PROOF_STEPS = DATA_DIR / "proof_steps.jsonl"
+
+    parser = argparse.ArgumentParser(
+        description="Split proof-step file into training, validation, and test dataset files."
+    )
+    parser.add_argument(
+        "-i", "--proof-steps", default=PROOF_STEPS, help="Path to proof-step file"
+    )
+    parser.add_argument(
+        "-o", "--output-dir", default=DATA_DIR, help="Directory to output datasets"
+    )
+    parser.add_argument(
+        "-v",
+        "--validation",
+        type=int,
+        default=20,
+        help="Percentage of dataset to be used in validation set",
+    )
+    parser.add_argument(
+        "-t",
+        "--test",
+        type=int,
+        default=10,
+        help="Percentage of dataset to be used in validation set",
+    )
+    parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Print progress messages",
+    )
+    args = parser.parse_args()
+    main(
+        proof_steps_file=args.proof_steps,
+        output_dir=args.output_dir,
+        percent_valid=args.validation,
+        percent_test=args.test,
+        verbose=args.verbose,
+    )

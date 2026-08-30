@@ -11,3 +11,4 @@ valid_training.txt
 /finetuning/output
 **/.venv
 /data/proof_step_sections
+/data/datasets
