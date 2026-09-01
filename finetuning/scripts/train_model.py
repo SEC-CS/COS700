@@ -82,14 +82,18 @@ def format_proofstep(theorem: str, substitution: dict) -> str:
     proof search, so the model needs to be trained on exactly the string
     shape it will be evaluated against.
     """
-    subst_str = ' '.join(f"{{{{ {v} : {' '.join(val)} }}}}"
-                          for v, val in sorted(substitution.items()) if val)
+    subst_str = " ".join(
+        f"{{{{ {v} : {' '.join(val)} }}}}"
+        for v, val in sorted(substitution.items())
+        if val
+    )
     return f"{theorem}" + (f" {subst_str}" if subst_str else "")
 
 
 # ---------------------------------------------------------------------------
 # Dataset
 # ---------------------------------------------------------------------------
+
 
 class ProofStepDataset(Dataset):
     """
@@ -98,8 +102,13 @@ class ProofStepDataset(Dataset):
     set to -100 so the loss is only computed over the PROOFSTEP portion.
     """
 
-    def __init__(self, jsonl_path: str, tokenizer, max_length: int = 512,
-                 max_examples: int = None):
+    def __init__(
+        self,
+        jsonl_path: str,
+        tokenizer,
+        max_length: int = 512,
+        max_examples: int = None,
+    ):
         self.examples = []
         with open(jsonl_path) as f:
             for line_no, line in enumerate(f, start=1):
@@ -110,8 +119,9 @@ class ProofStepDataset(Dataset):
                     continue
                 record = json.loads(line)
                 try:
-                    proof_step = format_proofstep(record["theorem"],
-                                                   record["substitution"])
+                    proof_step = format_proofstep(
+                        record["theorem"], record["substitution"]
+                    )
                     goal = record["goal"]
                 except KeyError as e:
                     raise KeyError(
@@ -170,59 +180,109 @@ class PadCollator:
 # Main
 # ---------------------------------------------------------------------------
 
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--train", required=True, help="Path to train.jsonl")
     parser.add_argument("--valid", required=True, help="Path to valid.jsonl")
-    parser.add_argument("--base-model", default="Qwen/Qwen2.5-Coder-1.5B",
-                         help="HF hub id or local path of the base model")
+    parser.add_argument(
+        "--base-model",
+        default="Qwen/Qwen2.5-Coder-0.5B",
+        help="HF hub id or local path of the base model",
+    )
     parser.add_argument("--output-dir", default="./finetuning/output/finetuned-prover")
     parser.add_argument("--epochs", type=float, default=2)
-    parser.add_argument("--batch-size", type=int, default=4)
-    parser.add_argument("--eval-batch-size", type=int, default=None,
-                         help="Batch size for validation passes. Eval has "
-                              "no backward pass, so this can usually be "
-                              "set higher than --batch-size without OOM. "
-                              "Defaults to --batch-size if unset.")
-    parser.add_argument("--grad-accum", type=int, default=8)
-    parser.add_argument("--lr", type=float, default=1e-4,
-                         help="Learning rate (default 1e-4 is tuned for "
-                              "small datasets; use 2e-4 for larger datasets)")
-    parser.add_argument("--max-length", type=int, default=512)
-    parser.add_argument("--eval-steps", type=int, default=1000)
-    parser.add_argument("--save-steps", type=int, default=1000)
-    parser.add_argument("--max-steps", type=int, default=-1,
-                         help="Cap training at this many optimizer steps, "
-                              "overriding --epochs. Use for a quick smoke "
-                              "test, e.g. --max-steps 300")
-    parser.add_argument("--max-train-samples", type=int, default=None,
-                         help="Only read the first N examples from --train "
-                              "(skips tokenizing the whole file -- useful "
-                              "for a quick test run)")
-    parser.add_argument("--max-valid-samples", type=int, default=None,
-                         help="Only read the first N examples from --valid")
-    parser.add_argument("--use-lora", dest="use_lora", action="store_true",
-                         default=True, help="Train LoRA adapters (default)")
-    parser.add_argument("--no-lora", dest="use_lora", action="store_false",
-                         help="Full fine-tune instead of LoRA")
-    parser.add_argument("--lora-rank", type=int, default=8,
-                         help="LoRA rank r (default 8 for small datasets; "
-                              "use 16 for larger datasets)")
-    parser.add_argument("--lora-alpha", type=int, default=16,
-                         help="LoRA alpha scaling (default 16; keep alpha/r ≈ 2)")
-    parser.add_argument("--load-in-4bit", action="store_true",
-                         help="QLoRA: quantize the base model to 4-bit "
-                              "before attaching LoRA adapters")
-    parser.add_argument("--gradient-checkpointing", dest="grad_ckpt",
-                         action="store_true", default=None,
-                         help="Force gradient checkpointing on (trades "
-                              "speed for memory -- lets you fit a bigger "
-                              "batch). Default: off with LoRA, on for a "
-                              "full fine-tune.")
-    parser.add_argument("--no-gradient-checkpointing", dest="grad_ckpt",
-                         action="store_false")
-    parser.add_argument("--num-workers", type=int, default=2,
-                         help="Dataloader worker processes")
+    parser.add_argument("--batch-size", type=int, default=6)
+    parser.add_argument(
+        "--eval-batch-size",
+        type=int,
+        default=None,
+        help="Batch size for validation passes. Eval has "
+        "no backward pass, so this can usually be "
+        "set higher than --batch-size without OOM. "
+        "Defaults to --batch-size if unset.",
+    )
+    parser.add_argument("--grad-accum", type=int, default=4)
+    parser.add_argument(
+        "--lr",
+        type=float,
+        default=1e-4,
+        help="Learning rate (default 1e-4 is tuned for "
+        "small datasets; use 2e-4 for larger datasets)",
+    )
+    parser.add_argument("--max-length", type=int, default=400)
+    parser.add_argument("--eval-steps", type=int, default=250)
+    parser.add_argument("--save-steps", type=int, default=250)
+    parser.add_argument(
+        "--max-steps",
+        type=int,
+        default=-1,
+        help="Cap training at this many optimizer steps, "
+        "overriding --epochs. Use for a quick smoke "
+        "test, e.g. --max-steps 300",
+    )
+    parser.add_argument(
+        "--max-train-samples",
+        type=int,
+        default=None,
+        help="Only read the first N examples from --train "
+        "(skips tokenizing the whole file -- useful "
+        "for a quick test run)",
+    )
+    parser.add_argument(
+        "--max-valid-samples",
+        type=int,
+        default=None,
+        help="Only read the first N examples from --valid",
+    )
+    parser.add_argument(
+        "--use-lora",
+        dest="use_lora",
+        action="store_true",
+        default=True,
+        help="Train LoRA adapters (default)",
+    )
+    parser.add_argument(
+        "--no-lora",
+        dest="use_lora",
+        action="store_false",
+        help="Full fine-tune instead of LoRA",
+    )
+    parser.add_argument(
+        "--lora-rank",
+        type=int,
+        default=16,
+        help="LoRA rank r (default 8 for small datasets; "
+        "use 16 for larger datasets)",
+    )
+    parser.add_argument(
+        "--lora-alpha",
+        type=int,
+        default=32,
+        help="LoRA alpha scaling (default 16; keep alpha/r ≈ 2)",
+    )
+    parser.add_argument(
+        "--load-in-4bit",
+        action="store_true",
+        help="QLoRA: quantize the base model to 4-bit "
+        "before attaching LoRA adapters",
+    )
+    parser.add_argument(
+        "--gradient-checkpointing",
+        dest="grad_ckpt",
+        action="store_true",
+        default=None,
+        help="Force gradient checkpointing on (trades "
+        "speed for memory -- lets you fit a bigger "
+        "batch). Default: off with LoRA, on for a "
+        "full fine-tune.",
+    )
+    parser.add_argument(
+        "--no-gradient-checkpointing", dest="grad_ckpt", action="store_false"
+    )
+    parser.add_argument(
+        "--num-workers", type=int, default=2, help="Dataloader worker processes"
+    )
     args = parser.parse_args()
     if args.grad_ckpt is None:
         args.grad_ckpt = not args.use_lora
@@ -251,7 +311,7 @@ def main():
         print("on CPU is not practically feasible (this would take weeks")
         print("to months). If you have an NVIDIA GPU in this machine, check")
         print("that torch was installed with CUDA support:")
-        print("  python -c \"import torch; print(torch.cuda.is_available())\"")
+        print('  python -c "import torch; print(torch.cuda.is_available())"')
         print("If that prints False on a machine with an NVIDIA GPU, your")
         print("torch install is CPU-only -- reinstall from")
         print("https://pytorch.org/get-started/locally/ with the matching")
@@ -269,19 +329,24 @@ def main():
     model_kwargs = dict(dtype=compute_dtype)
     if args.load_in_4bit:
         from transformers import BitsAndBytesConfig
+
         model_kwargs["quantization_config"] = BitsAndBytesConfig(
             load_in_4bit=True,
             bnb_4bit_compute_dtype=compute_dtype,
             bnb_4bit_quant_type="nf4",
         )
 
-    model = AutoModelForCausalLM.from_pretrained(args.base_model, attn_implementation="sdpa", **model_kwargs)
+    model = AutoModelForCausalLM.from_pretrained(
+        args.base_model, attn_implementation="sdpa", **model_kwargs
+    )
     model.config.pad_token_id = tokenizer.pad_token_id
 
     if args.use_lora:
         from peft import LoraConfig, TaskType, get_peft_model
+
         if args.load_in_4bit:
             from peft import prepare_model_for_kbit_training
+
             model = prepare_model_for_kbit_training(
                 model, use_gradient_checkpointing=args.grad_ckpt
             )
@@ -290,18 +355,27 @@ def main():
             r=args.lora_rank,
             lora_alpha=args.lora_alpha,
             lora_dropout=0.05,
-            target_modules=["q_proj", "k_proj", "v_proj", "o_proj",
-                             "gate_proj", "up_proj", "down_proj"],
+            target_modules=[
+                "q_proj",
+                "k_proj",
+                "v_proj",
+                "o_proj",
+                "gate_proj",
+                "up_proj",
+                "down_proj",
+            ],
         )
         model = get_peft_model(model, lora_config)
         model.print_trainable_parameters()
     else:
         model.gradient_checkpointing_enable()
 
-    train_dataset = ProofStepDataset(args.train, tokenizer, args.max_length,
-                                      max_examples=args.max_train_samples)
-    valid_dataset = ProofStepDataset(args.valid, tokenizer, args.max_length,
-                                      max_examples=args.max_valid_samples)
+    train_dataset = ProofStepDataset(
+        args.train, tokenizer, args.max_length, max_examples=args.max_train_samples
+    )
+    valid_dataset = ProofStepDataset(
+        args.valid, tokenizer, args.max_length, max_examples=args.max_valid_samples
+    )
     collator = PadCollator(tokenizer)
 
     print(f"Train examples: {len(train_dataset)}")
@@ -350,7 +424,7 @@ def main():
 
     final_dir = os.path.join(args.output_dir, "final")
     model.save_pretrained(final_dir)
-    
+
     tokenizer.save_pretrained(final_dir)
     print(f"Saved fine-tuned model to {final_dir}")
 
