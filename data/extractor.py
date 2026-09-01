@@ -283,7 +283,7 @@ def extract_proof_steps(
 # ------------------------------------------------------------
 # CLI Main
 # ------------------------------------------------------------
-def main():
+if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Extract supervised Metamath training data."
     )
@@ -321,7 +321,3 @@ def main():
         training_output=args.training,
     )
     print(f"Returned DataFrame with {len(df)} rows")
-
-
-if __name__ == "__main__":
-    main()

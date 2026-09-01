@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pandas as pd
 import argparse
 import re
@@ -5,6 +7,7 @@ import metamathpy.database as md
 import os
 import json
 from extractor import extract_proof_steps
+from build_dataset import main as build_dataset
 
 """
 USAGE:
@@ -82,16 +85,26 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Split set.mm into sections")
     parser.add_argument("--mm", required=True, help="Path to set.mm file")
     parser.add_argument(
+        "--output-dir",
+        default="proof_step_sections",
+        help="Path to directory for output files",
+    )
+    parser.add_argument(
         "--chunk-size",
         default=2_000,
         type=int,
         help="Chunk Size to split dataframe when writing to file (lower chunk size reduces memory usage but increases runtime)",
     )
+    parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Print progress messages",
+    )
     args = parser.parse_args()
 
     # Split MM file by maths branches/sections
     branches = split_mm_by_headings(args.mm)
-    proof_steps = extract_proof_steps(mm_path="set.mm", verbose=True)
+    proof_steps = extract_proof_steps(mm_path=args.mm, verbose=args.verbose)
 
     for branch, mm_content in branches.items():
         theorems = get_theorem_names(mm_content)
@@ -99,12 +112,22 @@ if __name__ == "__main__":
         df = proof_steps[filt]
 
         chunk_size = args.chunk_size
-        output_path = f"./proof_step_sections/{branch}.jsonl"
+        output_dir = Path(args.output_dir) / branch
+        output_path = output_dir / "all.jsonl"
+        # output_path = f"{args.output_dir}/{branch}/all.jsonl"
 
-        if not os.path.exists("./proof_step_sections/"):
-            os.makedirs("./proof_step_sections/")
+        if not os.path.exists(output_dir):
+            os.makedirs(output_dir)
         with open(output_path, "w") as f:
             for start in range(0, len(df), chunk_size):
                 chunk = df.iloc[start : start + chunk_size]
                 for record in chunk.to_dict(orient="records"):
                     f.write(json.dumps(record, ensure_ascii=False) + "\n")
+
+        build_dataset(
+            proof_steps_file=output_path,
+            output_dir=output_dir,
+            percent_valid=20,
+            percent_test=10,
+            verbose=args.verbose,
+        )
