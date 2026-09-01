@@ -1,15 +1,24 @@
 """
 model.py
 ========
-Implements the Model interface proof_search.py expects (see the docstring
-at the top of that file): a class with generate_steps(goal_str, n,
-temperature) -> list[(proofstep_str, log_probability)].
+Implements the Model interface proof_search.py and premis_search.py expects.
 
-This loads the model saved by train_model.py and uses it to sample
-candidate proof steps for a given goal, computing an actual sequence
-log-probability for each so the search's priority queue (which orders by
-cumulative log-probability) behaves correctly.
+Format required by proof_search.py:
+Input:
+              goal_str — goal in the format:
+                "[[ |- hyp1   |- hyp2 ]] |- conclusion"
 
+            Output:
+              List of (proofstep_string, log_probability) tuples,
+              deduplicated, sorted by log_probability descending.
+
+              proofstep_string format:
+                "theorem_label {{ var1 : val1 }} {{ var2 : val2 }} ..."
+
+              log_probability: float, more negative = less confident.
+            \"""
+
+ 
 Usage:
     python proof_search.py --mm set.mm --goal "|- ( ph -> ph )" \
         --model-module model.py
@@ -25,7 +34,7 @@ import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 # Point this at the directory train_model.py saved (<output-dir>/final).
-MODEL_DIR = os.environ.get("PROVER_MODEL_DIR", "./finetuning/output/finetuned-prover/final")
+MODEL_DIR = os.environ.get("PROVER_MODEL_DIR", "./finetuning/output/FOL_model/final")
 
 PROMPT_TEMPLATE = "GOAL: {goal}\nPROOFSTEP:"
 
@@ -50,14 +59,9 @@ class Model:
             model_dir, torch_dtype=torch.bfloat16
         ).to(self.device)
         self.model.eval()
-
-        # Adaptive generation batch size, shared across calls. We start by
-        # trying to generate all `n` candidates in one generate() call --
-        # one prompt prefill instead of ceil(n/8) of them, plus one set of
-        # CUDA kernel-launch overhead instead of four -- and only shrink it
-        # if that actually overflows VRAM, remembering the smaller size so
-        # we don't rediscover it on every subsequent goal. 
         self._gen_batch_size = None
+        self._successes_since_shrink = 0
+        self._growth_patience = 20
 
         if _DEBUG_GEN_LEN:
             self._genlen_count = 0
@@ -81,6 +85,10 @@ class Model:
 
         batch_size = self._gen_batch_size or n
         remaining = n
+       
+        consecutive_oom_at_floor = 0
+        MAX_OOM_AT_FLOOR = 3
+
         while remaining > 0:
             k = min(batch_size, remaining)
             try:
@@ -96,28 +104,45 @@ class Model:
                     output_scores=True,
                     return_dict_in_generate=True,
                 )
+
+                transition_scores = self.model.compute_transition_scores(
+                    outputs.sequences, outputs.scores, normalize_logits=True
+                )
+                # Decrease batch if OOM
             except torch.cuda.OutOfMemoryError:
-                # This batch size doesn't fit in VRAM -- back off, remember
-                # the smaller size for future calls, and retry this chunk.
                 torch.cuda.empty_cache()
+                if batch_size == 1:
+                    consecutive_oom_at_floor += 1
+                    if consecutive_oom_at_floor >= MAX_OOM_AT_FLOOR:
+                        raise RuntimeError(
+                            f"generate_steps() OOM'd {MAX_OOM_AT_FLOOR} times "
+                            f"possible mem leak or goal too large for GPU. "
+                        ) from None
+                else: 
+                    consecutive_oom_at_floor = 0
                 batch_size = max(1, batch_size // 2)
                 self._gen_batch_size = batch_size
+                self._successes_since_shrink = 0
                 continue
 
+            consecutive_oom_at_floor = 0
             self._gen_batch_size = batch_size
 
-            # Per-token log-probabilities for every generated position.
-            transition_scores = self.model.compute_transition_scores(
-                outputs.sequences, outputs.scores, normalize_logits=True
-            )
+            if batch_size < n:
+                self._successes_since_shrink += 1
+                if self._successes_since_shrink >= self._growth_patience:
+                    grown = min(batch_size * 2, n)
+                    if _DEBUG_GEN_LEN:
+                        print(f"[gen_batch] {self._successes_since_shrink} "
+                              f"OOM-free calls at {batch_size} -- "
+                              f"trying {grown}")
+                    batch_size = grown
+                    self._gen_batch_size = grown
+                    self._successes_since_shrink = 0
 
             for i in range(k):
                 full_ids = outputs.sequences[i][prompt_len:].tolist()
-
-                # Sequences that finish early are right-padded up to the
-                # batch's max length. Cut at the first EOS so neither the
-                # decoded text nor the summed log-probability includes
-                # padding that isn't part of the model's actual output.
+                
                 gen_len = full_ids.index(eos_id) if eos_id in full_ids else len(full_ids)
                 gen_ids = full_ids[:gen_len]
 

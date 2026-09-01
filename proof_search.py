@@ -1,44 +1,14 @@
 """
 proof_search.py
 ===============
-Proof search infrastructure for Metamath theorem proving.
 
-This module provides everything needed to run proof search EXCEPT the
-learned model itself. The model is a pluggable component supplied later.
+See help with `python proof_search.py --help` for usage.
 
-To plug in a model, create a Python file defining a class called 'Model':
-
-    class Model:
-        def generate_steps(
-            self,
-            goal_str: str,
-            n: int = 32,
-            temperature: float = 1.0,
-        ) -> list[tuple[str, float]]:
-            \"""
-            Input:
-              goal_str — goal in the format:
-                "[[ |- hyp1   |- hyp2 ]] |- conclusion"
-
-            Output:
-              List of (proofstep_string, log_probability) tuples,
-              deduplicated, sorted by log_probability descending.
-
-              proofstep_string format:
-                "theorem_label {{ var1 : val1 }} {{ var2 : val2 }} ..."
-
-              log_probability: float, more negative = less confident.
-            \"""
-
-Usage:
-  # Run a fine-tuned model
-  uv run python proof_search.py --mm data/set.mm --eval data/valid.jsonl --model-module my_model.py
-
-  # Run a fine-tuned model in demo mode
-  uv run python proof_search.py --demo --mm data/set.mm --eval data/valid.jsonl --model-module my_model.py
-
-  # Evaluate on harder theorems only (last 20% of split by position)
-  uv run python proof_search.py --mm data/set.mm --eval data/valid.jsonl --model-module my_model.py --hard-only
+Usage example:
+# Run proof search with 1 attempt and 64 expansions, writing proved theorems to proved_theorems.txt and expansion counts to expansions.csv:
+uv run python proof_search.py --mm data/set.mm --eval data/valid.jsonl --model-module model.py --proved-output proved_theorems.txt --expansions-output expansions.csv --attempts 1 --expansions 64
+   
+  
 """
 
 import heapq
@@ -189,15 +159,18 @@ def proof_search(
     temperature:    float = 1.0,
     verbose:        bool  = False,
     demo:           bool  = False,
+    heartbeat_every: int  = 20,
 ) -> tuple[Optional[dict], dict]:
     """
-    Run a proof search for a single goal.
+    Run a proof search for a single goal using Best-First Search.
 
     Returns
     -------
     (proof_tree, metrics)
 
-    proof_tree: dict mapping goal -> {step, subgoals} if proved, else None
+    proof_tree: dict mapping goal -> list of derivations tried for that goal.
+        Use extract_proof(root_goal, proof_tree) to pull out the single
+        derivation that actually proves the theorem.
     metrics: {
         'expansions':          int   — goal expansions used
         'candidates_examined': int   — total tactics passed to verifier
@@ -208,9 +181,9 @@ def proof_search(
     """
     start_time = time.time()
 
-    proof_tree         = {}
-    closed             = set()
-    expansions         = 0
+    proof_tree          = {}
+    closed              = set()
+    expansions          = 0
     candidates_examined = 0
     valid_tactics_found = 0
 
@@ -224,12 +197,15 @@ def proof_search(
             visiting = set()
         if goal in closed:
             return True
-        if goal not in proof_tree:
+        if goal not in proof_tree or not proof_tree[goal]:
             return False
         if goal in visiting:
             return False  # cycle — can't prove a goal via itself
         visiting.add(goal)
-        result = all(is_proved(sg, visiting) for sg in proof_tree[goal]['subgoals'])
+        result = any(
+            all(is_proved(sg, visiting) for sg in alt['subgoals'])
+            for alt in proof_tree[goal]
+        )
         visiting.discard(goal)
         if result:
             closed.add(goal)
@@ -244,6 +220,14 @@ def proof_search(
 
         expansions += 1
 
+        if heartbeat_every and expansions % heartbeat_every == 0:
+            elapsed = time.time() - start_time
+            preview = goal_str if len(goal_str) <= 60 else goal_str[:57] + "..."
+            print(f"    ... still searching: expansion {expansions}/"
+                  f"{max_expansions}, {valid_tactics_found} valid tactic(s) "
+                  f"so far, {elapsed:.0f}s elapsed  (on: {preview})",
+                  flush=True)
+
         candidates = model.generate_steps(
             goal_str, n=n_tactics, temperature=temperature)
 
@@ -252,6 +236,8 @@ def proof_search(
                   f"(logprob={entry.cumulative_logprob:.2f}) ===")
             print(f"Goal: {goal_str}")
             print(f"  {len(candidates)} candidate tactic(s) to try:")
+
+        proof_tree.setdefault(goal_str, [])
 
         for step_str, step_logprob in candidates:
             candidates_examined += 1
@@ -275,7 +261,7 @@ def proof_search(
                 else:
                     print(f"    -> valid, no subgoals remaining (closed)")
 
-            proof_tree[goal_str] = {'step': step_str, 'subgoals': subgoals}
+            proof_tree[goal_str].append({'step': step_str, 'subgoals': subgoals})
 
             child_logprob = entry.cumulative_logprob + step_logprob
             for subgoal in subgoals:
@@ -305,7 +291,9 @@ def proof_search(
                 }
                 return proof_tree, metrics
 
-            break  
+            # Best-First Search: Commit to the first valid tactic found for
+            # this goal expansion and move on to the next highest-priority node.
+            break
 
     elapsed = time.time() - start_time
     metrics = {
@@ -318,6 +306,17 @@ def proof_search(
     return None, metrics
 
 
+def format_duration(seconds: float) -> str:
+    """Human-readable duration for progress lines, e.g. 7290 -> '2h1m'."""
+    seconds = max(0, int(seconds))
+    h, rem = divmod(seconds, 3600)
+    m, s = divmod(rem, 60)
+    if h:
+        return f"{h}h{m}m"
+    if m:
+        return f"{m}m{s}s"
+    return f"{s}s"
+
 
 def count_proof_steps(proof_tree: dict) -> int:
     """Count the total number of steps in a completed proof tree."""
@@ -326,18 +325,63 @@ def count_proof_steps(proof_tree: dict) -> int:
     return sum(1 + len(v['subgoals']) for v in proof_tree.values())
 
 
+def extract_proof(root_goal: str, proof_tree: dict) -> Optional[dict]:
+    """
+    Extracts a clean {goal: {step, subgoals}} tree top-down from root_goal,
+    picking the alternative derivation whose subgoals are fully provable.
+    """
+    clean = {}
+    memo  = {}
+
+    def provable(goal: str, visiting: set) -> bool:
+        if goal in memo:
+            return memo[goal]
+        if goal not in proof_tree or goal in visiting:
+            memo[goal] = False
+            return False
+        visiting.add(goal)
+        for alt in proof_tree[goal]:
+            if all(provable(sg, visiting) for sg in alt['subgoals']):
+                clean[goal] = alt
+                visiting.discard(goal)
+                memo[goal] = True
+                return True
+        visiting.discard(goal)
+        memo[goal] = False
+        return False
+
+    if not provable(root_goal, set()):
+        return None
+    return clean
+
+
+def format_proved_theorem(label: str, root_goal: str, clean_proof: dict) -> str:
+    """
+    Render one fully-proved theorem as a text block: its label, root
+    goal, and every step of its actual proof as
+    "theorem_label {{ var : val }} ...".
+    """
+    lines = [f"THEOREM: {label}", f"GOAL: {root_goal}"]
+    for goal, info in clean_proof.items():
+        lines.append(f"  GOAL: {goal}")
+        lines.append(f"  STEP: {info['step']}")
+    lines.append("")
+    return "\n".join(lines)
+
+
 @dataclass
 class TheoremResult:
     """All measurements for one theorem across all attempts."""
     label:                  str
     proved:                 bool
     best_search_time_s:     float   
+    best_expansions:        int     
     total_search_time_s:    float   
     total_expansions:       int     
     total_candidates:       int     
     proof_steps:            int     
     attempts_used:          int     
-    difficulty_rank:        float   # 0.0 = easiest, 1.0 = hardest (by position)
+    difficulty_rank:        float   
 
 
 def evaluate(
@@ -351,21 +395,13 @@ def evaluate(
     hard_only:       bool = False,
     verbose:         bool = False,
     demo:            bool = False,
+    proved_output:   str  = None,
+    expansions_output: str = None,
+    progress_every:  int  = 1,
+    heartbeat_every: int  = 20,
 ) -> tuple[dict, list[TheoremResult]]:
     """
     Evaluate the prover on a split and collect all metrics.
-
-    Parameters
-    ----------
-    hard_only: if True, evaluate only on the hardest 20% of theorems
-               Used for the scalability metric.
-
-    Returns
-    -------
-    (summary, results)
-
-    summary: aggregated metrics dict
-    results: per-theorem TheoremResult list
     """
     theorem_goals = {}   
     theorem_order = []   
@@ -375,8 +411,8 @@ def evaluate(
             record = json.loads(line)
             label  = record['proof_label']
             if label not in theorem_goals:
-                theorem_goals[label] = record['goal']
                 theorem_order.append(label)
+            theorem_goals[label] = record['goal']
 
     if hard_only:
         cutoff = int(len(theorem_order) * 0.8)
@@ -386,17 +422,32 @@ def evaluate(
 
     total = len(theorem_order)
     print(f"\nEvaluating '{model_name}' on {total} theorems "
-          f"({attempts} attempts each, max {max_expansions} expansions) ...")
+          f"({attempts} attempts each, max {max_expansions} expansions) ...",
+          flush=True)
+
+    overall_start = time.time()
 
     results = []
     proved_count = 0
+    theorems_written = 0  
+
+    proved_file = open(proved_output, 'w') if proved_output else None
+
+    expansions_file = None
+    if expansions_output:
+        expansions_file = open(expansions_output, 'w')
+        expansions_file.write("proof_label,expansions\n")
 
     for i, label in enumerate(theorem_order):
         root_goal    = theorem_goals[label]
         difficulty   = (theorem_order.index(label) / max(total - 1, 1))
 
+        if heartbeat_every:
+            print(f"  [{i+1}/{total}] starting {label} ...", flush=True)
+
         proved            = False
         best_time         = float('inf')
+        best_expansions   = -1
         total_time        = 0.0
         total_expansions  = 0
         total_candidates  = 0
@@ -413,6 +464,7 @@ def evaluate(
                 n_tactics=n_tactics,
                 verbose=verbose,
                 demo=demo,
+                heartbeat_every=heartbeat_every,
             )
 
             total_time       += metrics['search_time_s']
@@ -422,7 +474,15 @@ def evaluate(
             if proof_tree is not None:
                 proved      = True
                 best_time   = metrics['search_time_s']
-                proof_steps = count_proof_steps(proof_tree)
+                best_expansions = metrics['expansions']
+                if expansions_file is not None:
+                    expansions_file.write(f"{label},{best_expansions}\n")
+                clean_proof = extract_proof(root_goal, proof_tree)
+                proof_steps = count_proof_steps(clean_proof)
+                if proved_file is not None and clean_proof is not None:
+                    proved_file.write(
+                        format_proved_theorem(label, root_goal, clean_proof))
+                    theorems_written += 1
                 break
 
         if proved:
@@ -434,6 +494,7 @@ def evaluate(
             label               = label,
             proved              = proved,
             best_search_time_s  = best_time,
+            best_expansions     = best_expansions,
             total_search_time_s = total_time,
             total_expansions    = total_expansions,
             total_candidates    = total_candidates,
@@ -442,11 +503,19 @@ def evaluate(
             difficulty_rank     = difficulty,
         ))
 
-        if (i + 1) % 10 == 0:
-            pct = proved_count / (i + 1) * 100
-            avg_time = total_time / attempts_used
-            print(f"  [{i+1}/{total}] proved={proved_count} "
-                  f"({pct:.1f}%) avg_time={avg_time:.2f}s")
+        if progress_every and (i + 1) % progress_every == 0:
+            elapsed  = time.time() - overall_start
+            avg_time = elapsed / (i + 1)
+            eta      = avg_time * (total - (i + 1))
+            pct      = proved_count / (i + 1) * 100
+            print(f"  [{i+1}/{total}] {label}  proved={proved_count} "
+                  f"({pct:.1f}%)  elapsed={format_duration(elapsed)}  "
+                  f"eta={format_duration(eta)}", flush=True)
+
+    if proved_file is not None:
+        proved_file.close()
+    if expansions_file is not None:
+        expansions_file.close()
 
     proved_results   = [r for r in results if r.proved]
     n_proved         = len(proved_results)
@@ -454,9 +523,10 @@ def evaluate(
 
     avg_search_time  = (sum(r.best_search_time_s for r in proved_results)
                         / max(n_proved, 1))
-    # Average only over theorems where at least one candidate was examined.
-    # Averaging over all theorems (including those where the model returned
-    # nothing) would drag the figure toward zero misleadingly.
+    avg_expansions_used = (sum(r.best_expansions for r in proved_results)
+                           / max(n_proved, 1))
+    max_expansions_used = (max((r.best_expansions for r in proved_results),
+                                default=0))
     active_results   = [r for r in results if r.total_candidates > 0]
     avg_candidates   = (sum(r.total_candidates for r in active_results)
                         / max(len(active_results), 1))
@@ -473,9 +543,12 @@ def evaluate(
         'proved':                  n_proved,
         'theorem_success_rate_%':  round(success_rate, 2),
         'avg_search_time_s':       round(avg_search_time, 4),
+        'avg_expansions_used':     round(avg_expansions_used, 1),
+        'max_expansions_used':     max_expansions_used,
         'avg_candidates_examined': round(avg_candidates, 1),
         'avg_proof_steps':         round(avg_proof_steps, 1),
         'hard_theorem_success_%':  round(hard_success_rate, 2),
+        'theorems_written_to_file': theorems_written,
     }
 
     print(f"\n{'='*60}")
@@ -484,11 +557,23 @@ def evaluate(
     print(f"  Theorem success rate      : {n_proved}/{total} "
           f"= {success_rate:.2f}%")
     print(f"  Avg search time (proved)  : {avg_search_time:.4f}s")
+    print(f"  Expansions used (proved)  : avg={avg_expansions_used:.1f}, "
+          f"max={max_expansions_used}  (out of a budget of "
+          f"{max_expansions} -- max_expansions can likely be lowered "
+          f"toward the max shown here, with a little headroom, without "
+          f"losing any of these successes)")
     print(f"  Avg candidates examined   : {avg_candidates:.1f} "
           f"(over {len(active_results)} theorems with any candidates)")
     print(f"  Avg proof length (steps)  : {avg_proof_steps:.1f}")
     print(f"  Hard theorem success rate : {hard_proved}/{len(hard_theorems)} "
           f"= {hard_success_rate:.2f}%")
+    if proved_output:
+        print(f"  Theorems written to file  : {theorems_written} "
+              f"(fully closed proofs only -- {proved_output})")
+        assert theorems_written == n_proved, (
+            "theorems_written should always equal n_proved: every "
+            "theorem counted as proved gets a clean extracted proof "
+        )
     print(f"{'='*60}")
 
     return summary, results
@@ -508,7 +593,10 @@ def main():
     parser.add_argument('--train-jsonl',  default=None,
                         help='Training split')
     parser.add_argument('--goal',         default=None,
-                        help='Single goal to prove e.g. "|- ( ph -> ph )"')
+                        help='Single goal to prove, in full -- same '
+                             'shape as a JSONL "goal" field, e.g. '
+                             '"[[ ]] |- ( ph -> ph )" for no hypotheses, '
+                             'or "[[ |- ph ]] |- ( ph \\/ ps )" with one')
     parser.add_argument('--eval',         default=None,
                         help='Evaluate on a split file e.g. valid.jsonl')
     parser.add_argument('--attempts',     type=int,  default=4)
@@ -520,6 +608,27 @@ def main():
     parser.add_argument('--demo',         action='store_true',
                         help='Print each candidate tactic tried and the '
                              'resulting subgoals in full, for live demos')
+    parser.add_argument('--proved-output', default=None,
+                        help='Path to write every fully-proved theorem '
+                             '(only the steps actually used in its '
+                             'finished proof) to as a text file, '
+                             'during --eval')
+    parser.add_argument('--expansions-output', default=None,
+                        help='Path to write a CSV of proof_label,'
+                             'expansions -- the number of expansions '
+                             'the successful attempt used -- for every '
+                             'proved theorem, during --eval')
+    parser.add_argument('--progress-every', type=int, default=1,
+                         help='Print a progress line (with elapsed '
+                              'time and ETA) every this many theorems '
+                              'during --eval (default: 1, i.e. every '
+                              'theorem)')
+    parser.add_argument('--heartbeat-every', type=int, default=20,
+                         help='Print a "starting theorem" line and a '
+                              '"still searching" line every this many '
+                              'expansions, so a slow theorem is '
+                              'distinguishable from a hang (default: '
+                              '20; 0 disables both)')
     args = parser.parse_args()
 
     if not args.goal and not args.eval:
@@ -547,7 +656,7 @@ def main():
 
     if args.goal:
         model_name, model = next(iter(models.items()))
-        root_goal = f"[[ ]] {args.goal}"
+        root_goal = args.goal
         print(f"\nProving: {root_goal}  (model: {model_name})")
 
         proof_tree, metrics = proof_search(
@@ -558,11 +667,13 @@ def main():
             n_tactics=args.tactics,
             verbose=args.verbose,
             demo=args.demo,
+            heartbeat_every=args.heartbeat_every,
         )
 
         if proof_tree:
             print("\nProof found!")
-            for goal, info in proof_tree.items():
+            clean_proof = extract_proof(root_goal, proof_tree)
+            for goal, info in (clean_proof or {}).items():
                 print(f"  GOAL: {goal}")
                 print(f"  STEP: {info['step']}")
         else:
@@ -585,6 +696,10 @@ def main():
                 hard_only=args.hard_only,
                 verbose=args.verbose,
                 demo=args.demo,
+                proved_output=args.proved_output,
+                expansions_output=args.expansions_output,
+                progress_every=args.progress_every,
+                heartbeat_every=args.heartbeat_every,
             )
 
 
