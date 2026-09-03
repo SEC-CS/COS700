@@ -67,27 +67,9 @@ from transformers import (
     Trainer,
     TrainingArguments,
 )
+from utils.formatting import format_proofstep
 
 PROMPT_TEMPLATE = "GOAL: {goal}\nPROOFSTEP:"
-
-
-def format_proofstep(theorem: str, substitution: dict) -> str:
-    """
-    Build the target PROOFSTEP text from a record's theorem + substitution
-    fields: "theorem_label {{ var1 : val1 }} {{ var2 : val2 }} ...".
-
-    This must stay byte-for-byte in sync with _format_proofstep() in
-    proof_search.py -- that's the function whose *parser* counterpart,
-    _parse_proofstep(), will be run on the model's generations during
-    proof search, so the model needs to be trained on exactly the string
-    shape it will be evaluated against.
-    """
-    subst_str = " ".join(
-        f"{{{{ {v} : {' '.join(val)} }}}}"
-        for v, val in sorted(substitution.items())
-        if val
-    )
-    return f"{theorem}" + (f" {subst_str}" if subst_str else "")
 
 
 # ---------------------------------------------------------------------------

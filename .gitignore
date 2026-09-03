@@ -1,14 +1,6 @@
 set.mm
-proof_steps.jsonl
-training.txt
-test.jsonl
-test_training.txt
-train.jsonl
-train_training.txt
-valid.jsonl
-valid_training.txt
 **/__pycache__
-/finetuning/output
+**/finetuning/output
 **/.venv
-/data/proof_step_sections
-/data/datasets
+**/data/proof_step_sections
+**/data/datasets

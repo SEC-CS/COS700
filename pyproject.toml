@@ -17,3 +17,9 @@ dependencies = [
 
 [tool.uv]
 package = false
+
+[dependency-groups]
+dev = [
+    "matplotlib>=3.11.1",
+    "seaborn>=0.13.2",
+]
