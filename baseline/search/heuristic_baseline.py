@@ -1,6 +1,6 @@
 import json
 import random
-from utils.formatting import parse_goal,  format_proofstep
+from baseline.utils.formatting import parse_goal,  format_proofstep
 
 # Set this to True to rank candidates by training-data usage frequency
 # instead of random shuffling. Requires PATH to point at data.

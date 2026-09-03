@@ -35,22 +35,8 @@ import argparse
 import json
 import time
 
-from proof_search import load_mmverify, load_model_from_module
-
-
-def format_proofstep(theorem: str, substitution: dict) -> str:
-    """
-    Build the target PROOFSTEP text from a record's theorem + substitution
-    fields: "theorem_label {{ var1 : val1 }} {{ var2 : val2 }} ...".
-
-    Kept byte-for-byte identical to format_proofstep() in train_model.py
-    and to check_lengths.py's copy of the same function -- all three
-    need to agree on exactly what string shape a proofstep target is.
-    If you change the format in one place, change it in the other two.
-    """
-    subst_str = ' '.join(f"{{{{ {v} : {' '.join(val)} }}}}"
-                          for v, val in sorted(substitution.items()) if val)
-    return f"{theorem}" + (f" {subst_str}" if subst_str else "")
+from baseline.search.proof_search import load_mmverify, load_model_from_module
+from baseline.utils.formatting import format_proofstep
 
 
 def load_split(split_file: str) -> list[dict]:

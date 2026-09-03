@@ -10,9 +10,14 @@ actual data instead of guessed. This matters in both directions:
     cut off part of the PROOFSTEP itself (the actual training target),
     corrupting those examples rather than erroring
 
-Usage:
-    python finetuning/scripts/check_lengths.py --input finetuning/data/train.jsonl \
-        --base-model Qwen/Qwen2.5-Coder-1.5B
+The PROOFSTEP target is rebuilt from each record's "theorem" and
+"substitution" fields with the shared format_proofstep(), so this
+measures exactly the string train_model.py will train on.
+
+Usage (from the repository root):
+    python -m baseline.finetuning.scripts.check_lengths \
+        --input data/01_CLASSICAL_FIRST-ORDER_LOGIC_WITH_EQUALITY/train.jsonl \
+        --base-model Qwen/Qwen2.5-Coder-0.5B
 """
 
 import argparse
@@ -20,6 +25,8 @@ import json
 import random
 
 from transformers import AutoTokenizer
+
+from baseline.utils.formatting import format_proofstep
 
 PROMPT_TEMPLATE = "GOAL: {goal}\nPROOFSTEP:"
 
@@ -56,7 +63,9 @@ def main():
     for line in sample:
         record = json.loads(line)
         prompt = PROMPT_TEMPLATE.format(goal=record["goal"])
-        target = " " + record["proof_step"]
+        target = " " + format_proofstep(
+            record["theorem"], record["substitution"]
+        )
         n_tokens = len(
             tokenizer(prompt + target, add_special_tokens=False)["input_ids"]
         ) + 1  # +1 for the eos token train_model.py appends

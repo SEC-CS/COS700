@@ -21,7 +21,7 @@ import importlib.util
 import os
 from dataclasses import dataclass, field
 from typing import Optional
-from utils.formatting import parse_goal, parse_proofstep, format_goal
+from baseline.utils.formatting import parse_goal, parse_proofstep, format_goal
 
 def load_mmverify(path: str):
     """Load mmverify.py as a module from a file path."""

@@ -2,37 +2,18 @@
 """
 train_model.py
 ===============
-Fine-tunes a pre-trained causal language model on extracted Metamath
-proof steps (methodology section 4a).
 
-Training objective: conditional language modelling. Given a GOAL, predict
-the PROOFSTEP. Loss is masked on the GOAL portion of each sequence so the
-model only receives gradient signal from learning to generate correct
-tactics -- exactly the setup described in the methodology doc, and the
-same one used by the GPT-f paper.
-
-Expected input format
-----------------------
---train / --valid point to JSONL files, one record per proof step:
-
-    {"proof_label":  "xornan",
+Prepare a fine-tuned model for proof search by training on a dataset of
+{goal, theorem, substitution} records. Each record is a single proof step
+that the model should learn to predict, given the goal. The training data
+is a JSONL file of records like this:
+    {
+    "proof_label":  "xornan",
      "goal":         "[[ ]] |- ( ( ph \\/_ ps ) <-> ( ( ph \\/ ps ) /\\ -. ( ph /\\ ps ) ) )",
      "theorem":      "xor2",
-     "substitution": {"ph": ["ph"], "ps": ["ps"]}}
+     "substitution": {"ph": ["ph"], "ps": ["ps"]}
+     }
 
-i.e. "theorem" is the label of the axiom/theorem applied at this proof
-step, and "substitution" maps its mandatory variables to their
-substituted token lists. This matches the fields extract_proof_steps.py
-actually writes and the fields evaluate() in proof_search.py already
-reads (proof_label, goal).
-
-The training TARGET (the PROOFSTEP text the model has to learn to
-generate) is built from theorem + substitution by format_proofstep()
-below, which mirrors _format_proofstep() in proof_search.py exactly --
-producing "theorem_label {{ var1 : val1 }} {{ var2 : val2 }} ..." --
-since that's the exact string proof_search.py's _parse_proofstep() will
-parse back out of the model's generations at search time. Keep the two
-functions in sync if either changes.
 
 These records need to be split into train/valid/test files first --
 see split_dataset.py -- before pointing --train/--valid at them.
@@ -41,13 +22,10 @@ Output
 ------
 A single directory containing the fine-tuned model's weights, config, and
 tokenizer -- loadable with a plain AutoModelForCausalLM.from_pretrained()
-call, per the methodology doc. If --use-lora is on (the default), LoRA
-adapters are trained for efficiency and merged back into the base model
-before saving, so the *saved* artifact is a normal, adapter-free model.
+
 
 Usage
 -----
-    pip install torch transformers peft accelerate bitsandbytes
 
     python -m finetuning.scripts.train_model --train finetuning/data/train.jsonl --valid finetuning/data/valid.jsonl --base-model Qwen/Qwen2.5-Coder-0.5B --output-dir ./finetuning/output/finetuned-prover --epochs 1 --batch-size 8 --grad-accum 4 --max-length 512 --max-valid-samples 2000 --eval-steps 5000 --save-steps 5000
 
@@ -67,7 +45,7 @@ from transformers import (
     Trainer,
     TrainingArguments,
 )
-from utils.formatting import format_proofstep
+from baseline.utils.formatting import format_proofstep
 
 PROMPT_TEMPLATE = "GOAL: {goal}\nPROOFSTEP:"
 

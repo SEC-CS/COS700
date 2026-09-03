@@ -6,8 +6,8 @@ import re
 import metamathpy.database as md
 import os
 import json
-from extractor import extract_proof_steps
-from build_dataset import main as build_dataset
+from baseline.data.extractor import extract_proof_steps
+from baseline.data.build_dataset import main as build_dataset
 
 """
 USAGE:
