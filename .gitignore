@@ -4,3 +4,6 @@ set.mm
 **/.venv
 **/data/proof_step_sections
 **/data/datasets
+**/label_table.pkl
+**/*.residual.jsonl
+

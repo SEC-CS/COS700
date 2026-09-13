@@ -1,36 +1,9 @@
 #!/usr/bin/env python
 """
-train_model.py
-===============
-
-Prepare a fine-tuned model for proof search by training on a dataset of
-{goal, theorem, substitution} records. Each record is a single proof step
-that the model should learn to predict, given the goal. The training data
-is a JSONL file of records like this:
-    {
-    "proof_label":  "xornan",
-     "goal":         "[[ ]] |- ( ( ph \\/_ ps ) <-> ( ( ph \\/ ps ) /\\ -. ( ph /\\ ps ) ) )",
-     "theorem":      "xor2",
-     "substitution": {"ph": ["ph"], "ps": ["ps"]}
-     }
-
-
-These records need to be split into train/valid/test files first --
-see split_dataset.py -- before pointing --train/--valid at them.
-
-Output
-------
-A single directory containing the fine-tuned model's weights, config, and
-tokenizer -- loadable with a plain AutoModelForCausalLM.from_pretrained()
-
 
 Usage
------
+    python -m baseline.finetuning.scripts.train_model --train data/01/train.jsonl --valid data/01/valid.jsonl --base-model Qwen/Qwen2.5-Coder-0.5B --output-dir ./baseline/finetuning/output/finetuned-prover 
 
-    python -m finetuning.scripts.train_model --train finetuning/data/train.jsonl --valid finetuning/data/valid.jsonl --base-model Qwen/Qwen2.5-Coder-0.5B --output-dir ./finetuning/output/finetuned-prover --epochs 1 --batch-size 8 --grad-accum 4 --max-length 512 --max-valid-samples 2000 --eval-steps 5000 --save-steps 5000
-
-
-Then point proof_search.py at the result via model.py (see that file).
 """
 
 import argparse
@@ -57,10 +30,21 @@ PROMPT_TEMPLATE = "GOAL: {goal}\nPROOFSTEP:"
 
 class ProofStepDataset(Dataset):
     """
-    Reads a JSONL file of {goal, proof_step} records and tokenizes each into
-    a single (prompt + target) sequence, with labels for the prompt tokens
-    set to -100 so the loss is only computed over the PROOFSTEP portion.
+    Reads a JSONL file of {goal, theorem, substitution} records and tokenizes
+    each into a single (prompt + target) sequence, with labels for the prompt
+    tokens set to -100 so the loss is only computed over the PROOFSTEP
+    portion.
     """
+
+    def target_text(self, record: dict) -> str:
+        """
+        The string the model is trained to produce for this record.
+
+        The only thing the residuals variant changes -- everything else about
+        training, including every hyperparameter, is shared, so the two runs
+        stay comparable.
+        """
+        return format_proofstep(record["theorem"], record["substitution"])
 
     def __init__(
         self,
@@ -79,13 +63,12 @@ class ProofStepDataset(Dataset):
                     continue
                 record = json.loads(line)
                 try:
-                    proof_step = format_proofstep(
-                        record["theorem"], record["substitution"]
-                    )
+                    proof_step = self.target_text(record)
                     goal = record["goal"]
                 except KeyError as e:
                     raise KeyError(
                         f"{jsonl_path}:{line_no} is missing field {e} -- "
+                        f"keys present: {sorted(record)}"
                     ) from e
                 self.examples.append((goal, proof_step))
         self.tokenizer = tokenizer
@@ -141,8 +124,18 @@ class PadCollator:
 # ---------------------------------------------------------------------------
 
 
-def main():
-    parser = argparse.ArgumentParser(description=__doc__)
+def main(
+    dataset_cls=ProofStepDataset,
+    doc: str = __doc__,
+    output_dir: str = "./baseline/finetuning/output/finetuned-prover",
+):
+    """
+    The whole training run. `dataset_cls` and `output_dir` are the only
+    things a variant method is expected to change -- see
+    residuals/finetuning/scripts/train_model.py -- so that any difference in
+    results comes from the data, not from a drifted hyperparameter.
+    """
+    parser = argparse.ArgumentParser(description=doc)
     parser.add_argument("--train", required=True, help="Path to train.jsonl")
     parser.add_argument("--valid", required=True, help="Path to valid.jsonl")
     parser.add_argument(
@@ -150,7 +143,7 @@ def main():
         default="Qwen/Qwen2.5-Coder-0.5B",
         help="HF hub id or local path of the base model",
     )
-    parser.add_argument("--output-dir", default="./finetuning/output/finetuned-prover")
+    parser.add_argument("--output-dir", default=output_dir)
     parser.add_argument("--epochs", type=float, default=2)
     parser.add_argument("--batch-size", type=int, default=6)
     parser.add_argument(
@@ -219,7 +212,7 @@ def main():
         "--lora-alpha",
         type=int,
         default=32,
-        help="LoRA alpha scaling (default 16; keep alpha/r ≈ 2)",
+        help="LoRA alpha scaling (default 32; keep alpha/r ≈ 2)",
     )
     parser.add_argument(
         "--load-in-4bit",
@@ -247,40 +240,18 @@ def main():
     if args.grad_ckpt is None:
         args.grad_ckpt = not args.use_lora
 
-    # --- Detect what hardware is actually available and pick a matching
-    # --- precision, instead of assuming bf16 + GPU are there. -----------
-    has_cuda = torch.cuda.is_available()
-    use_bf16 = has_cuda and torch.cuda.is_bf16_supported()
-    use_fp16 = has_cuda and not use_bf16
-
-    if has_cuda:
-        gpu_name = torch.cuda.get_device_name(0)
-        precision = "bf16" if use_bf16 else "fp16"
-        print(f"GPU detected: {gpu_name} -- training in {precision}.")
-        compute_dtype = torch.bfloat16 if use_bf16 else torch.float16
-        # Free speed on Ampere+ (RTX 30/40-series and newer): lets matmuls
-        # use TF32 internally without affecting the bf16/fp16 training
-        # precision set above.
-        torch.backends.cuda.matmul.allow_tf32 = True
-        torch.backends.cudnn.allow_tf32 = True
-    else:
-        precision = "fp32 (CPU)"
-        compute_dtype = torch.float32
-        print("No CUDA GPU detected -- falling back to CPU.")
-        print("WARNING: fine-tuning a 1.5B-parameter model on ~3M examples")
-        print("on CPU is not practically feasible (this would take weeks")
-        print("to months). If you have an NVIDIA GPU in this machine, check")
-        print("that torch was installed with CUDA support:")
-        print('  python -c "import torch; print(torch.cuda.is_available())"')
-        print("If that prints False on a machine with an NVIDIA GPU, your")
-        print("torch install is CPU-only -- reinstall from")
-        print("https://pytorch.org/get-started/locally/ with the matching")
-        print("CUDA version selected. If there's no GPU at all, consider a")
-        print("hosted GPU (Colab, Kaggle, a university cluster) instead.")
-
-    if args.load_in_4bit and not has_cuda:
-        print("--load-in-4bit requires a CUDA GPU; ignoring it on CPU.")
-        args.load_in_4bit = False
+    # Training is GPU-only: bf16 where the card supports it, fp16 otherwise.
+    use_bf16 = torch.cuda.is_bf16_supported()
+    use_fp16 = not use_bf16
+    compute_dtype = torch.bfloat16 if use_bf16 else torch.float16
+    print(
+        f"GPU: {torch.cuda.get_device_name(0)} -- training in "
+        f"{'bf16' if use_bf16 else 'fp16'}."
+    )
+    # Free speed on Ampere+ (RTX 30/40-series and newer): lets matmuls use
+    # TF32 internally without affecting the bf16/fp16 precision set above.
+    torch.backends.cuda.matmul.allow_tf32 = True
+    torch.backends.cudnn.allow_tf32 = True
 
     tokenizer = AutoTokenizer.from_pretrained(args.base_model)
     if tokenizer.pad_token is None:
@@ -330,10 +301,10 @@ def main():
     else:
         model.gradient_checkpointing_enable()
 
-    train_dataset = ProofStepDataset(
+    train_dataset = dataset_cls(
         args.train, tokenizer, args.max_length, max_examples=args.max_train_samples
     )
-    valid_dataset = ProofStepDataset(
+    valid_dataset = dataset_cls(
         args.valid, tokenizer, args.max_length, max_examples=args.max_valid_samples
     )
     collator = PadCollator(tokenizer)
@@ -359,10 +330,9 @@ def main():
         save_total_limit=3,
         bf16=use_bf16,
         fp16=use_fp16,
-        use_cpu=not has_cuda,
         gradient_checkpointing=args.grad_ckpt,
         dataloader_num_workers=args.num_workers,
-        dataloader_pin_memory=has_cuda,
+        dataloader_pin_memory=True,
         report_to="none",
     )
 
