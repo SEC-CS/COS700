@@ -6,6 +6,10 @@ import random
 from collections import defaultdict
 from pathlib import Path
 
+"""
+Split a jsonl dataset into training, validation, and testing subsets.
+"""
+
 
 def format_substitution(substitution):
     """
@@ -131,10 +135,6 @@ def output_to_file(
 
     for split in ("train", "valid", "test"):
         print(f"  {split:5s}: " f"{step_counts[split]:,}")
-
-    if verbose:
-        print()
-        print("Finished.")
 
 
 def main(

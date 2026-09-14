@@ -1,8 +1,5 @@
 #!/usr/bin/env python3
 """
-extractor.py
-============
-
 Extract supervised training examples from a Metamath database.
 
 Each training example consists of
