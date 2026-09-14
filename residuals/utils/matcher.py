@@ -1,47 +1,27 @@
 """
-residuals/utils/matcher.py
-==========================
+
 Recovers the part of a proof step's substitution that is determined by the
 goal, so the model never has to emit it.
 
-A Metamath step is `label` plus a substitution for the applied theorem's
-mandatory variables. Most of those variables occur in the theorem's own
-conclusion, and that conclusion -- under the substitution -- must equal the
-goal. So they are pinned by matching the conclusion pattern against the
-goal, and are a lookup rather than a prediction. The rest, occurring only
-in the theorem's hypotheses, are *residual*: the cut formula, the one part
-of the step that is a genuine choice.
-
-This is first-order matching, not unification: only the pattern carries
-variables, the goal is ground, and substitution is literal token-list
-splicing (see mmverify's six-line apply_subst). `A. x ph` is three tokens,
-not a binder -- variable capture is what $d conditions handle, separately
-and afterwards.
-
-IMPORTANT: data preparation and proof search must call the *same*
-`complete()` with the same `cap`. The training target for a step is built
-by stripping exactly the variables the matcher will recover at search
-time; strip a variable the matcher then recovers differently and you have
-made a training example the model cannot rescue -- it emits a correct
-label and the step still fails, with nothing in the loss to say why.
 """
 
 import pickle
 from pathlib import Path
 
-# Solutions to return per goal. 32 rather than 8: raising the cap moves the
-# unrecoverable rate on section 01 from 0.41% to 0.05% (25 steps -> 3 of
-# 6035), while the rate at which the FIRST solution is the correct one is
-# flat at 94.98% either way.
+# Solutions to return per goal. With `balanced` pruning below, section 01
+# needs far less than this: all 7885 steps across train/valid/test have the
+# correct substitution as the matcher's FIRST solution. The headroom is for
+# sections with larger, less constrained expressions.
 DEFAULT_CAP = 32
 
-# Bound on search nodes per goal. A handful of set.mm theorems (merco1,
-# merco1lem10, lukshef-ax1 -- Meredith and Lukasiewicz-Sheffer single-axiom
-# systems) have 400-700 token flat conclusions with many variables and
-# almost no constants to anchor spans against, and blow naive width-guessing
-# up to ~2M nodes / 1.5s. 1.06% of section-01 steps cost over 1ms; the
-# median is 8us. Without this bound throughput is 83 goals/s; with it, 604.
+# Bound on search nodes per goal, for a conclusion with many variables and
+# few constants to anchor spans against, where naive width-guessing blows
+# up. `balanced` pruning made this mostly redundant -- section 01 now runs
+# at 27k goals/s
 DEFAULT_MAX_NODES = 2_000_000
+
+PAIRS = {"(": ")", "{": "}", "[": "]", "<.": ">.", "[.": "].", "[_": "]_"}
+CLOSERS = {close: open_ for open_, close in PAIRS.items()}
 
 DEFAULT_MM = "data/set.mm"
 # mmverify.py is a vendored third-party verifier rather than method code, so
@@ -130,13 +110,12 @@ def complete(
     Every substitution s with apply_subst(pattern, s) == goal_conclusion,
     in the order proof search should try them.
 
-    On section 01 the first solution returned is the correct one for 94.98%
-    of steps, and the correct one is somewhere in the list for 99.95%.
-    Ambiguity is cheap to live with: hand every solution to the verifier as
-    a separate candidate step and let it discriminate. Resolving it properly
-    would mean parsing the goal with set.mm's 1445 syntax axioms and
-    matching tree-against-tree, which is unique and linear but a real
-    parser; it is an optimisation, not a prerequisite.
+    Remaining ambiguity is cheap to live with: hand every solution to the
+    verifier as a separate candidate step and let it discriminate. Resolving
+    it completely would mean parsing the goal with set.mm's 1445 syntax
+    axioms and matching tree-against-tree, which is unique and linear but a
+    real parser; with `balanced` pruning most of the spurious width guesses
+    it is an optimisation, not a prerequisite.
     """
     out = []
     nodes = 0
@@ -177,7 +156,10 @@ def complete(
         for width in range(1, max(1, widest) + 1):
             if ti + width > len(goal_conclusion):
                 break
-            subst[token] = goal_conclusion[ti : ti + width]
+            span = goal_conclusion[ti : ti + width]
+            if not balanced(span):
+                continue  # not an expression, so not a real substitution
+            subst[token] = span
             rec(pi + 1, ti + width, subst)
             del subst[token]
             if len(out) >= cap or nodes > max_nodes:
@@ -185,6 +167,18 @@ def complete(
 
     rec(0, 0, {})
     return out
+
+
+def balanced(tokens: list) -> bool:
+    """Whether a token span's delimiters nest properly."""
+    stack = []
+    for token in tokens:
+        if token in PAIRS:
+            stack.append(token)
+        elif token in CLOSERS:
+            if not stack or stack.pop() != CLOSERS[token]:
+                return False
+    return not stack
 
 
 def determined_key(subst: dict, rvars: set) -> tuple:

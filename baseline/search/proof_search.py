@@ -578,9 +578,18 @@ def evaluate(
 
     return summary, results
 
-def main():
+def main(add_args=None, wrap_model=None, doc=None):
+    """
+    The whole evaluation run.
+
+    `add_args` and `wrap_model` are the only things a variant method is
+    expected to change -- see residuals/search/proof_search.py -- so that
+    any difference in results comes from the method, not from a drifted
+    search parameter. `wrap_model(model, mm, args)` returns the model the
+    search will actually call.
+    """
     parser = argparse.ArgumentParser(
-        description='Metamath proof search with full evaluation metrics'
+        description=doc or 'Metamath proof search with full evaluation metrics'
     )
     parser.add_argument('--mm',           required=True,
                         help='Path to set.mm')
@@ -629,6 +638,8 @@ def main():
                               'expansions, so a slow theorem is '
                               'distinguishable from a hang (default: '
                               '20; 0 disables both)')
+    if add_args is not None:
+        add_args(parser)
     args = parser.parse_args()
 
     if not args.goal and not args.eval:
@@ -652,6 +663,8 @@ def main():
 
     if args.model_module:
         learned = load_model_from_module(args.model_module, mm)
+        if wrap_model is not None:
+            learned = wrap_model(learned, mm, args)
         models[args.model_name] = learned
 
     if args.goal:

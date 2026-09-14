@@ -19,13 +19,15 @@ data construction and classifies each record by what proof search will
 actually do with it:
 
     strip   the matcher's FIRST solution is correct -- target is
-            label + residual                                    (94.98%)
+            label + residual                                   (100.00%)
     ranked  the correct solution is at rank > 1 -- still label + residual,
-            but search must try that many substitutions           (4.97%)
+            but search must try that many substitutions           (0.00%)
     full    the matcher cannot recover it -- target carries the whole
-            substitution behind a sentinel                        (0.05%)
+            substitution behind a sentinel                        (0.00%)
 
-(Rates measured on section 01 train, 6035 steps, cap 32.)
+(Rates measured on section 01, all 7885 train/valid/test steps, cap 32.
+Section 01 is clean; ranked and full still have to be handled because a
+section with wider expressions need not be.)
 
 `target_class` and `match_rank` are written through to the output so
 evaluation can be sliced by them later: `ranked` is a search-cost number,
