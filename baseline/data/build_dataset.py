@@ -88,7 +88,7 @@ def build_theorem_split(
     index_valid = len(theorems) * percent_valid // 100
     index_test = index_valid + (len(theorems) * percent_test // 100)
 
-    valid = set(theorems[:index_valid])
+    valid = set(sampled[:index_valid])
     test = set(sampled[index_valid:index_test])
     train = set(sampled[index_test:])
 
