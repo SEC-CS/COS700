@@ -1,9 +1,45 @@
 #!/usr/bin/env python
 """
-train_model_sub.py
+train_substitution_model.py
 ============================
 Fine-tunes a pre-trained causal language model to predict a theorem's
-SUBSTITUTION, given the GOAL and the THEOREM that was applied.
+SUBSTITUTION, given the GOAL and that theorem's own structural
+definition (its mandatory variables, essential hypotheses, and
+conclusion) -- NOT the theorem's name/label.
+
+Why the theorem's structure instead of its name
+-------------------------------------------------
+Feeding the model a bare label like "xor2" forces it to memorize, per
+theorem name, what variables that theorem has and what shape its
+conclusion takes -- that knowledge doesn't transfer to a theorem it
+saw rarely or never during training.
+
+Feeding it the theorem's actual mandatory variables, hypotheses, and
+conclusion instead gives the model the same information a human proving
+the goal by hand would use: the conclusion's shape can be pattern-matched
+against the goal's own shape to work out most variable values (since the
+conclusion, once correctly substituted, must equal the goal), and the
+mandatory variable list tells the model exactly which variables it needs
+to produce values for in the first place.
+
+Where this structural info comes from
+---------------------------------------
+The JSONL only stores each record's theorem NAME. To turn that into its
+actual definition, this script loads the real .mm database (the same way
+proof_search.py does, via mmverify.py) and looks the label up in
+mm.labels: `(distinct, mand_var, hyp, result) = mm.labels[theorem][1]`.
+The theorem name itself is discarded after this lookup -- it never
+appears in the model's input.
+
+`distinct` ($d disjointness constraints) is deliberately left out of the
+prompt: it's a validity check the verifier applies AFTER a substitution
+is proposed, not information that helps produce the substitution's
+token values in the first place.
+
+ASSUMPTION TO VERIFY: this assumes mand_var entries are
+(typecode, varname) tuples, matching how proof_search.py destructures
+them (`for _, v in mand_var`). If your mmverify.py stores them the other
+way round, swap the unpacking in format_theorem_info() below.
 
 Expected input format
 ----------------------
@@ -14,9 +50,10 @@ Expected input format
      "theorem":      "xor2",
      "substitution": {"ph": ["ph"], "ps": ["ps"]}}
 
-"goal" and "theorem" go into the PROMPT (theorem is given, not
-predicted, here). "substitution" is turned into the generation TARGET by
-format_substitution() below.
+"goal" goes into the prompt as-is. "theorem" is used only to look up
+that theorem's definition in the .mm database (see above) -- it is not
+itself part of the model's input. "substitution" is turned into the
+generation TARGET by format_substitution() below.
 
 IMPORTANT: format_substitution()/parse_substitution() below are a
 reasonable default ("{{ var : val }} {{ var : val }} ..."), but they are
@@ -37,10 +74,27 @@ Usage
 -----
     pip install torch transformers peft accelerate bitsandbytes
 
-    python -m finetuning.scripts.train_model_sub --train finetuning/data/train.jsonl --valid finetuning/data/valid.jsonl --base-model Qwen/Qwen2.5-Coder-0.5B --output-dir ./finetuning/output/finetuned-substitution --epochs 1 --batch-size 8 --grad-accum 4 --max-length 512 --max-valid-samples 2000 --eval-steps 5000 --save-steps 5000
+    python -m finetuning.scripts.train_substitution_model --mm data/set.mm --mmverify data/mmverify.py --train finetuning/data/train.jsonl --valid finetuning/data/valid.jsonl --base-model Qwen/Qwen2.5-Coder-0.5B --output-dir ./finetuning/output/finetuned-substitution --epochs 1 --batch-size 8 --grad-accum 4 --max-length 512 --max-valid-samples 2000 --eval-steps 5000 --save-steps 5000
+    (
+        uv run python -m modular.finetuning.scripts.train_model_sub
+          --mm baseline/data/set.mm
+          --mmverify baseline/data/mmverify.py
+          --train baseline/data/small_datasets/longest_theorems/train.jsonl
+          --valid baseline/data/small_datasets/longest_theorems/valid.jsonl
+          --base-model Qwen/Qwen2.5-Coder-0.5B
+          --output-dir ./modular/finetuning/output/finetuned-substitution
+          --epochs 1
+          --batch-size 8
+          --grad-accum 4
+          --max-length 512
+          --max-valid-samples 2000
+          --eval-steps 5000
+          --save-steps 5000
+    )
 """
 
 import argparse
+import importlib.util
 import json
 import os
 
@@ -53,7 +107,80 @@ from transformers import (
     TrainingArguments,
 )
 
-PROMPT_TEMPLATE = "GOAL: {goal}\nTHEOREM: {theorem}\nSUBSTITUTION:"
+PROMPT_TEMPLATE = (
+    "GOAL: {goal}\n"
+    "MANDVARS: {mandvars}\n"
+    "HYP: {hyp}\n"
+    "RESULT: {result}\n"
+    "SUBSTITUTION:"
+)
+
+
+# ---------------------------------------------------------------------------
+# .mm database loading and theorem-info lookup
+# ---------------------------------------------------------------------------
+
+
+def load_mmverify(path: str):
+    """Load mmverify.py as a module from a file path (same approach as
+    proof_search.py's load_mmverify, duplicated here so this script has
+    no import dependency on proof_search.py)."""
+    spec = importlib.util.spec_from_file_location("mmverify", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    mod.verbosity = 0
+    return mod
+
+
+def load_mm_database(mm_path: str, mmverify_path: str):
+    """Loads the .mm database and returns the mm object, whose .labels
+    dict is what format_theorem_info()/build_theorem_info_cache() below
+    look theorems up in."""
+    mmv = load_mmverify(mmverify_path)
+    mm = mmv.MM()
+    with open(mm_path, "r", encoding="utf-8", errors="replace") as f:
+        mm.read(mmv.toks(f))
+    return mm
+
+
+def format_theorem_info(mand_var: list, hyp: list, result: list) -> dict:
+    """
+    Turns a theorem's raw (mand_var, hyp, result) -- as stored in
+    mm.labels -- into the three text fields the prompt template needs.
+
+    mand_var: list of (typecode, varname) tuples -- see the ASSUMPTION
+        note at the top of this file if this order is wrong for your
+        mmverify.py.
+    hyp:      list of essential hypotheses, each a list of tokens.
+    result:   the theorem's conclusion, a list of tokens.
+    """
+    mandvars_str = ", ".join(f"{typecode} {var}" for typecode, var in mand_var)
+    hyp_str = " ; ".join(" ".join(tokens) for tokens in hyp)
+    result_str = " ".join(result)
+    return {"mandvars": mandvars_str, "hyp": hyp_str, "result": result_str}
+
+
+def build_theorem_info_cache(mm, labels_needed: set) -> dict:
+    """
+    Looks up every label in labels_needed once and caches its formatted
+    theorem-info fields, so a training set with many repeated theorems
+    doesn't repeat the same mm.labels lookup and formatting work for
+    every single example that uses it.
+
+    Labels missing from mm.labels, or not a $a/$p statement, are left
+    out of the returned cache; callers use that to skip such examples.
+    """
+    cache = {}
+    for label in labels_needed:
+        entry = mm.labels.get(label)
+        if entry is None:
+            continue
+        kind, data = entry
+        if kind not in ("$a", "$p"):
+            continue
+        _distinct, mand_var, hyp, result = data
+        cache[label] = format_theorem_info(mand_var, hyp, result)
+    return cache
 
 
 # ---------------------------------------------------------------------------
@@ -113,16 +240,23 @@ class SubstitutionDataset(Dataset):
     tokenizes each into a single (prompt + target) sequence, with labels
     for the prompt tokens set to -100 so the loss is only computed over
     the SUBSTITUTION portion.
+
+    The prompt is built from the goal plus theorem_info_cache[theorem]
+    (mandatory variables, hypotheses, conclusion) -- never from the
+    theorem's name itself.
     """
 
     def __init__(
         self,
         jsonl_path: str,
         tokenizer,
+        theorem_info_cache: dict,
         max_length: int = 512,
         max_examples: int = None,
     ):
         self.examples = []
+        skipped_unknown_theorem = 0
+
         with open(jsonl_path) as f:
             for line_no, line in enumerate(f, start=1):
                 if max_examples is not None and len(self.examples) >= max_examples:
@@ -137,7 +271,25 @@ class SubstitutionDataset(Dataset):
                     substitution_text = format_substitution(record["substitution"])
                 except KeyError as e:
                     raise KeyError(f"{jsonl_path}:{line_no} is missing field {e}") from e
-                self.examples.append((goal, theorem, substitution_text))
+
+                # A theorem missing from the .mm database (or not a
+                # $a/$p statement) has no structural info to build a
+                # prompt from, so this example can't be used.
+                if theorem not in theorem_info_cache:
+                    skipped_unknown_theorem += 1
+                    continue
+
+                self.examples.append(
+                    (goal, theorem_info_cache[theorem], substitution_text)
+                )
+
+        if skipped_unknown_theorem:
+            print(
+                f"WARNING: {jsonl_path} contained {skipped_unknown_theorem} example(s) "
+                "whose theorem was missing from the .mm database (or not a $a/$p "
+                "statement); they were skipped."
+            )
+
         self.tokenizer = tokenizer
         self.max_length = max_length
 
@@ -145,8 +297,8 @@ class SubstitutionDataset(Dataset):
         return len(self.examples)
 
     def __getitem__(self, idx):
-        goal, theorem, substitution_text = self.examples[idx]
-        prompt = PROMPT_TEMPLATE.format(goal=goal, theorem=theorem)
+        goal, theorem_info, substitution_text = self.examples[idx]
+        prompt = PROMPT_TEMPLATE.format(goal=goal, **theorem_info)
         target = " " + substitution_text + self.tokenizer.eos_token
 
         prompt_ids = self.tokenizer(prompt, add_special_tokens=False)["input_ids"]
@@ -191,8 +343,26 @@ class PadCollator:
 # ---------------------------------------------------------------------------
 
 
+def collect_theorem_labels(*jsonl_paths: str) -> set:
+    """Scans one or more JSONL files and returns every distinct theorem
+    label used, so the .mm lookup cache can be built once up front."""
+    labels = set()
+    for path in jsonl_paths:
+        with open(path) as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                labels.add(json.loads(line)["theorem"])
+    return labels
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--mm", required=True, help="Path to the .mm database (e.g. set.mm)")
+    parser.add_argument(
+        "--mmverify", required=True, help="Path to mmverify.py, used to parse --mm"
+    )
     parser.add_argument("--train", required=True, help="Path to train.jsonl")
     parser.add_argument("--valid", required=True, help="Path to valid.jsonl")
     parser.add_argument(
@@ -329,6 +499,19 @@ def main():
         print("--load-in-4bit requires a CUDA GPU; ignoring it on CPU.")
         args.load_in_4bit = False
 
+    # --- Load the .mm database once and look up every theorem this run
+    # --- will need, so each JSONL example's prompt can be built from
+    # --- that theorem's actual mandatory variables/hypotheses/result
+    # --- instead of its bare name. --------------------------------------
+    print(f"Loading .mm database from {args.mm} ...")
+    mm = load_mm_database(args.mm, args.mmverify)
+    labels_needed = collect_theorem_labels(args.train, args.valid)
+    theorem_info_cache = build_theorem_info_cache(mm, labels_needed)
+    print(
+        f"Resolved structural info for {len(theorem_info_cache)}/"
+        f"{len(labels_needed)} distinct theorem labels."
+    )
+
     tokenizer = AutoTokenizer.from_pretrained(args.base_model)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
@@ -378,10 +561,18 @@ def main():
         model.gradient_checkpointing_enable()
 
     train_dataset = SubstitutionDataset(
-        args.train, tokenizer, args.max_length, max_examples=args.max_train_samples
+        args.train,
+        tokenizer,
+        theorem_info_cache,
+        args.max_length,
+        max_examples=args.max_train_samples,
     )
     valid_dataset = SubstitutionDataset(
-        args.valid, tokenizer, args.max_length, max_examples=args.max_valid_samples
+        args.valid,
+        tokenizer,
+        theorem_info_cache,
+        args.max_length,
+        max_examples=args.max_valid_samples,
     )
     collator = PadCollator(tokenizer)
 
@@ -426,7 +617,7 @@ def main():
     if args.use_lora:
         model = model.merge_and_unload()
 
-    final_dir = os.path.join(args.output_dir, "final_sub")
+    final_dir = os.path.join(args.output_dir, "final")
     model.save_pretrained(final_dir)
     tokenizer.save_pretrained(final_dir)
     print(f"Saved fine-tuned substitution model to {final_dir}")

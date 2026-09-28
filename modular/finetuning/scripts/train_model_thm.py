@@ -60,6 +60,20 @@ Usage
 
     uv run python -m finetuning.scripts.train_model_thm --train finetuning/data/train.jsonl --valid finetuning/data/valid.jsonl --base-model Qwen/Qwen2.5-Coder-0.5B --output-dir ./finetuning/output/finetuned-classifier --epochs 1 --batch-size 8 --grad-accum 4 --max-length 512 --max-valid-samples 2000 --eval-steps 5000 --save-steps 5000
     uv run python -m modular.finetuning.scripts.train_model_thm --train baseline/data/datasets/longest_theorems/train.jsonl --valid baseline/data/datasets/longest_theorems/valid.jsonl --base-model Qwen/Qwen2.5-Coder-0.5B --output-dir ./modular/finetuning/output/finetuned-classifier --epochs 1 --batch-size 8 --grad-accum 4 --max-length 512 --max-valid-samples 2000 --eval-steps 5000 --save-steps 5000
+    (
+        uv run python -m modular.finetuning.scripts.train_model_thm
+          --train baseline/data/small_datasets/longest_theorems/train.jsonl
+          --valid baseline/data/small_datasets/longest_theorems/valid.jsonl
+          --base-model Qwen/Qwen2.5-Coder-0.5B
+          --output-dir ./modular/finetuning/output/finetuned-classifier
+          --epochs 1
+          --batch-size 8
+          --grad-accum 4
+          --max-length 512
+          --max-valid-samples 2000
+          --eval-steps 5000
+          --save-steps 5000
+    )
 """
 
 import argparse
@@ -472,7 +486,7 @@ def main():
     if args.use_lora:
         model = model.merge_and_unload()
 
-    final_dir = os.path.join(args.output_dir, "final_thm")
+    final_dir = os.path.join(args.output_dir, "final")
     model.save_pretrained(final_dir)
     tokenizer.save_pretrained(final_dir)
 

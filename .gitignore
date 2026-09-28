@@ -6,4 +6,9 @@ set.mm
 **/data/datasets
 **/label_table.pkl
 **/*.residual.jsonl
-
+/data/all_theorems/
+/data/longest_theorems/
+/data/shortest_theorems/
+/finetuning/baseline/output/
+/finetuning/modular/output/
+/finetuning/residual/output/

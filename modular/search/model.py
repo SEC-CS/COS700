@@ -40,8 +40,8 @@ proof_search.py instantiates this class with no arguments
 (`model = mod.Model()`), so paths are read from environment variables
 with defaults matching the two training scripts' --output-dir defaults:
 
-    THEOREM_MODEL_DIR       (default: ./finetuning/output/finetuned-classifier/final)
-    SUBSTITUTION_MODEL_DIR  (default: ./finetuning/output/finetuned-substitution/final)
+    THEOREM_MODEL_DIR       (default: modular/finetuning/output/finetuned-classifier/final)
+    SUBSTITUTION_MODEL_DIR  (default: modular/finetuning/output/finetuned-substitution/final)
     K_THEOREMS              (default: 5)  -- how many candidate theorems to try per goal
 """
 
@@ -55,10 +55,10 @@ from transformers import (
 )
 
 THEOREM_MODEL_DIR = os.environ.get(
-    "THEOREM_MODEL_DIR", "./finetuning/output/finetuned-classifier/final"
+    "THEOREM_MODEL_DIR", "modular/finetuning/output/finetuned-classifier/final"
 )
 SUBSTITUTION_MODEL_DIR = os.environ.get(
-    "SUBSTITUTION_MODEL_DIR", "./finetuning/output/finetuned-substitution/final"
+    "SUBSTITUTION_MODEL_DIR", "modular/finetuning/output/finetuned-substitution/final"
 )
 K_THEOREMS = int(os.environ.get("K_THEOREMS", "5"))
 MAX_NEW_SUBSTITUTION_TOKENS = int(os.environ.get("MAX_NEW_SUBSTITUTION_TOKENS", "64"))
