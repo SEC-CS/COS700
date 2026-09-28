@@ -1,6 +1,4 @@
 """
-model.py
-========
 Implements the Model interface proof_search.py and premis_search.py expects.
 
 Format required by proof_search.py:
@@ -17,14 +15,6 @@ Input:
 
               log_probability: float, more negative = less confident.
             \"""
-
- 
-Usage:
-    python proof_search.py --mm set.mm --goal "|- ( ph -> ph )" \
-        --model-module model.py
-
-    python proof_search.py --mm set.mm --eval valid.jsonl \
-        --model-module model.py
 """
 
 import os
@@ -34,7 +24,13 @@ import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 # Point this at the directory train_model.py saved (<output-dir>/final).
-MODEL_DIR = os.environ.get("PROVER_MODEL_DIR", "./finetuning/output/FOL_model/final")
+if not os.environ.get("PROVER_MODEL_DIR"):
+    print(
+        "Please set PROVER_MODEL_DIR to the directory containing the trained model, e.g.:\n"
+        "  $env:PROVER_MODEL_DIR = '.\\baseline\\finetuning\\output\\longest_theorems\\final'"
+    )
+    sys.exit(1)
+MODEL_DIR = os.environ.get("PROVER_MODEL_DIR")
 
 PROMPT_TEMPLATE = "GOAL: {goal}\nPROOFSTEP:"
 
@@ -85,7 +81,7 @@ class Model:
 
         batch_size = self._gen_batch_size or n
         remaining = n
-       
+
         consecutive_oom_at_floor = 0
         MAX_OOM_AT_FLOOR = 3
 
@@ -118,7 +114,7 @@ class Model:
                             f"generate_steps() OOM'd {MAX_OOM_AT_FLOOR} times "
                             f"possible mem leak or goal too large for GPU. "
                         ) from None
-                else: 
+                else:
                     consecutive_oom_at_floor = 0
                 batch_size = max(1, batch_size // 2)
                 self._gen_batch_size = batch_size
@@ -133,17 +129,21 @@ class Model:
                 if self._successes_since_shrink >= self._growth_patience:
                     grown = min(batch_size * 2, n)
                     if _DEBUG_GEN_LEN:
-                        print(f"[gen_batch] {self._successes_since_shrink} "
-                              f"OOM-free calls at {batch_size} -- "
-                              f"trying {grown}")
+                        print(
+                            f"[gen_batch] {self._successes_since_shrink} "
+                            f"OOM-free calls at {batch_size} -- "
+                            f"trying {grown}"
+                        )
                     batch_size = grown
                     self._gen_batch_size = grown
                     self._successes_since_shrink = 0
 
             for i in range(k):
                 full_ids = outputs.sequences[i][prompt_len:].tolist()
-                
-                gen_len = full_ids.index(eos_id) if eos_id in full_ids else len(full_ids)
+
+                gen_len = (
+                    full_ids.index(eos_id) if eos_id in full_ids else len(full_ids)
+                )
                 gen_ids = full_ids[:gen_len]
 
                 logprob = transition_scores[i][:gen_len].sum().item()

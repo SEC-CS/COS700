@@ -4,7 +4,7 @@
 
 Usage
 
-python -m residuals.finetuning.scripts.train_model --train residuals/data/01/train.residual.jsonl --valid residuals/data/01/valid.residual.jsonl --base-model Qwen/Qwen2.5-Coder-0.5B --output-dir ./residuals/finetuning/output/finetuned-prover 
+uv run python -m residuals.finetuning.scripts.train_model --train residuals/data/longest_theorems/train.residual.jsonl --valid residuals/data/longest_theorems/valid.residual.jsonl --base-model Qwen/Qwen2.5-Coder-0.5B --output-dir ./residuals/finetuning/output/finetuned-prover --max-length 250
 
 """
 

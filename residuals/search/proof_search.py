@@ -1,60 +1,33 @@
 #!/usr/bin/env python
-"""
-residuals/search/proof_search.py
-================================
-
-Proof search for a model trained on "label + residual" targets.
-
-Same search, same verifier, same metrics as the baseline. The one thing
-that changes is what sits between the model and the verifier.
-
-A residual-trained model emits a step with the determined variables
-missing:
-
-    syl {{ ps : A e. B }}
-
-which the verifier rejects out of hand -- it requires a substitution
-covering every mandatory variable of the applied theorem. So each predicted
-step is first *completed*: the applied theorem's conclusion is matched
-against the goal currently being expanded, and every substitution the
-matcher finds is merged with the model's residual to make one full,
-verifier-ready candidate step:
-
-    syl {{ ph : ( x = y ) }} {{ ps : A e. B }} {{ ch : ... }}
-    syl {{ ph : x }} {{ ps : A e. B }} {{ ch : ... }}          <- alternative
-    ...
-
-This is the live counterpart of the `match_rank` that residualise.py
-recorded offline. Nothing here knows the rank, and nothing needs to: the
-candidates go to the verifier in matcher order and the verifier decides.
-The first one that holds is the step search takes -- which is why the
-candidates enter as ordinary tactics rather than being resolved behind the
-search's back. They are scored, counted and tried exactly like any other
-candidate, so `candidates_examined` stays an honest count of verifier work
-and the two methods' metrics remain comparable.
-
-A step whose target carried the `!FULL` sentinel already holds a complete
-substitution, so it skips matching and goes straight to the verifier.
-
-Because completion happens before the verifier, the proof tree records the
-full step -- proofs written by --proved-output are complete and checkable,
-not residual fragments.
-
+r"""
 Usage
 -----
 Run from the repository root. Same flags as the baseline, plus --cap.
 
-    python -m residuals.search.proof_search --mm data/set.mm --eval data/01/valid.jsonl --model-module residuals/search/model.py --proved-output proved_theorems.txt --attempts 1 --expansions 64
+Run Both:
+
+$env:PROVER_MODEL_DIR = ".\residuals\finetuning\output\finetuned-prover\longest_theorems_model"
+
+uv run python -m residuals.search.proof_search `
+  --mm baseline\data\set.mm `
+  --eval residuals\data\longest_theorems\test.residual.jsonl `
+  --model-module baseline/search/model.py `
+  --proved-output .\residuals\results\longest_theorems_proved.txt `
+  --expansions-output .\residuals\results\longest_expansions.csv `
+  --attempts 1 `
+  --expansions 32 2>&1 | Tee-Object residuals/results/proof_search.log 
 
 --cap must match the value the training data was built with, or the model
 was trained to omit variables this search recovers differently.
+
+Optional add to command writes console output to baseline/results/proof_search.log:
+2>&1 | Tee-Object residuals/results/proof_search.log 
 """
 
 from baseline.search.proof_search import main as baseline_main
-from residuals.utils.formatting import (
+from baseline.utils.formatting import (
     format_proofstep,
-    goal_conclusion,
-    parse_target,
+    parse_proofstep,
 )
 from residuals.utils.matcher import (
     DEFAULT_CACHE,
@@ -78,6 +51,10 @@ class ResidualModel:
         self.model = model
         self.table = table
         self.cap = cap
+        self.excluded_labels = set()
+
+    def set_excluded_labels(self, labels: set[str]) -> None:
+        self.excluded_labels = set(labels)
 
     def generate_steps(self, goal_str: str, n: int = 32, temperature: float = 1.0):
         out = []
@@ -99,32 +76,31 @@ class ResidualModel:
         matcher returns them.
 
         A prediction that cannot be completed -- unparseable, an unknown
-        label, or a conclusion that does not match this goal at all -- is
-        passed through unchanged rather than dropped, so it still reaches
-        the verifier, is still rejected there, and is still counted. A
-        silently dropped candidate would understate the work search did.
+        label, or a conclusion that does not match this goal at all is dropped.
         """
-        parsed = parse_target(step_str)
+        target = step_str.strip()
+
+        parsed = parse_proofstep(target)
         if parsed is None:
             return [step_str]
 
         label, residual = parsed["theorem"], parsed["subst"]
 
-        # Sentinel: the model emitted the complete substitution itself,
-        # because the matcher could not recover this step at all.
-        if parsed["full"]:
-            print(f"Residual model emitted !FULL step: {step_str}")
-            return [format_proofstep(label, residual)]
+        if label in self.excluded_labels:
+            return []
 
         info = self.table.get(label)
         if info is None:
-            print(f"Residual model emitted unknown theorem: {step_str}")
-            return [step_str] # not a real theorem label, let the verifier reject it
+            return []
 
         steps = []
         seen = set()
+
         for candidate in complete(
-            info["result"], goal_conclusion(goal_str), info["kinds"], cap=self.cap
+            info["result"],
+            goal_str.split("]]", 1)[1].split(),
+            info["kinds"],
+            cap=self.cap,
         ):
             key = determined_key(candidate, info["rvars"])
             if key in seen:

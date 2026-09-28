@@ -1,51 +1,17 @@
 #!/usr/bin/env python3
 """
-residuals/data/residualise.py
-=============================
 Convert proof-step JSONL splits into "label + residual" training targets.
-
-At training time the ground-truth substitution is already in the record, so
-splitting it into determined and residual parts needs no matching at all --
-`rvars` from the label table says which variables occur in the applied
-theorem's conclusion:
-
-    residual = {v: val for v, val in record["substitution"].items()
-                if v not in table[record["theorem"]]["rvars"]}
-
-That naive version is a trap, though. "Occurs in the conclusion" is a
-static, per-label property; "the matcher recovers it on THIS goal" is not
-the same thing. So this script runs the real inference-time matcher during
-data construction and classifies each record by what proof search will
-actually do with it:
-
-    strip   the matcher's FIRST solution is correct -- target is
-            label + residual                                   (100.00%)
-    ranked  the correct solution is at rank > 1 -- still label + residual,
-            but search must try that many substitutions           (0.00%)
-    full    the matcher cannot recover it -- target carries the whole
-            substitution behind a sentinel                        (0.00%)
-
-(Rates measured on section 01, all 7885 train/valid/test steps, cap 32.
-Section 01 is clean; ranked and full still have to be handled because a
-section with wider expressions need not be.)
-
-`target_class` and `match_rank` are written through to the output so
-evaluation can be sliced by them later: `ranked` is a search-cost number,
-and knowing whether residual steps fail on the label or on the residual
-value is what decides where to spend effort next.
 
 Usage
 -----
 Run from the repository root.
-
     # one split
     python -m residuals.data.residualise \\
         --split data/01_CLASSICAL_FIRST-ORDER_LOGIC_WITH_EQUALITY/train.jsonl
-
     # a whole section, writing <split>.residual.jsonl next to each input
-    python -m residuals.data.residualise \\
-        --split data/01_CLASSICAL_FIRST-ORDER_LOGIC_WITH_EQUALITY/{train,valid,test}.jsonl \\
-        --out-dir residuals/data/01
+    python -m residuals.data.residualise --split .\baseline\data\datasets\longest_theorems\train.jsonl .\baseline\data\datasets\longest_theorems\valid.jsonl .\baseline\data\datasets\longest_theorems\test.jsonl --out-dir residuals/data/longest_theorems
+
+Note: 
 
 The first run parses set.mm (~100s) and caches the label table; later runs
 load the cache. Pass --rebuild after set.mm changes.
@@ -57,7 +23,7 @@ import json
 import statistics
 from pathlib import Path
 
-from residuals.utils.formatting import format_proofstep, format_target, goal_conclusion
+from baseline.utils.formatting import format_proofstep
 from residuals.utils.matcher import (
     DEFAULT_CACHE,
     DEFAULT_CAP,
@@ -89,25 +55,29 @@ def residualise(record: dict, table: dict, cap: int = DEFAULT_CAP) -> tuple:
     rvars = info["rvars"]
 
     # What the matcher is responsible for recovering, per the ground truth.
-    truth = determined_key({v: subst[v] for v in rvars}, rvars)
+    # Older extracted datasets can omit mandatory variables that the current
+    # database exposes in the assertion.
+    truth = determined_key(
+        {v: subst[v] for v in rvars if v in subst}, rvars
+    )
 
     solutions = []
     for candidate in complete(
-        info["result"], goal_conclusion(record["goal"]), info["kinds"], cap=cap
+        info["result"], record["goal"].split("]]", 1)[1].split(), info["kinds"], cap=cap
     ):
         key = determined_key(candidate, rvars)
         if key not in solutions:
             solutions.append(key)
 
     if truth not in solutions:
-        # Unrecoverable: keep the complete substitution so the step stays
-        # representable, flagged so search skips the matcher for it.
-        return format_target(record["theorem"], subst, sentinel=True), "full", 0
+        # Unrecoverable, should not happen on clean data.
+        step = format_proofstep(record["theorem"], subst)
+        return step, "full", 0
 
     residual = {v: val for v, val in subst.items() if v not in rvars}
     rank = solutions.index(truth) + 1
     klass = "strip" if rank == 1 else "ranked"
-    return format_target(record["theorem"], residual), klass, rank
+    return format_proofstep(record["theorem"], residual), klass, rank
 
 
 def convert(

@@ -1,18 +1,8 @@
 #!/usr/bin/env python
 """
-check_lengths.py
-================
 Reports the token-length distribution of (GOAL + PROOFSTEP) sequences in
 a JSONL file, so --max-length in train_model.py can be set from your
-actual data instead of guessed. This matters in both directions:
-  - too high wastes VRAM/time padding short sequences unnecessarily
-  - too low silently truncates the tail of longer sequences, which can
-    cut off part of the PROOFSTEP itself (the actual training target),
-    corrupting those examples rather than erroring
-
-The PROOFSTEP target is rebuilt from each record's "theorem" and
-"substitution" fields with the shared format_proofstep(), so this
-measures exactly the string train_model.py will train on.
+actual data.
 
 Usage (from the repository root):
     python -m baseline.finetuning.scripts.check_lengths \
@@ -29,6 +19,12 @@ from transformers import AutoTokenizer
 from baseline.utils.formatting import format_proofstep
 
 PROMPT_TEMPLATE = "GOAL: {goal}\nPROOFSTEP:"
+
+
+def target_text(record):
+    if "target" in record:
+        return record["target"]
+    return format_proofstep(record["theorem"], record["substitution"])
 
 
 def main():
@@ -63,9 +59,7 @@ def main():
     for line in sample:
         record = json.loads(line)
         prompt = PROMPT_TEMPLATE.format(goal=record["goal"])
-        target = " " + format_proofstep(
-            record["theorem"], record["substitution"]
-        )
+        target = " " + target_text(record)
         n_tokens = len(
             tokenizer(prompt + target, add_special_tokens=False)["input_ids"]
         ) + 1  # +1 for the eos token train_model.py appends

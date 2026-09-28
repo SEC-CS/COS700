@@ -2,8 +2,7 @@
 """
 
 Usage
-    python -m baseline.finetuning.scripts.train_model --train data/01/train.jsonl --valid data/01/valid.jsonl --base-model Qwen/Qwen2.5-Coder-0.5B --output-dir ./baseline/finetuning/output/finetuned-prover 
-
+    uv run python -m baseline.finetuning.scripts.train_model --train .\baseline\data\datasets\longest_theorems\train.jsonl --valid .\baseline\data\datasets\longest_theorems\valid.jsonl --base-model Qwen/Qwen2.5-Coder-0.5B --output-dir ./baseline/finetuning/output/longest_theorems --max-length 350  
 """
 
 import argparse
@@ -84,6 +83,10 @@ class ProofStepDataset(Dataset):
 
         prompt_ids = self.tokenizer(prompt, add_special_tokens=False)["input_ids"]
         target_ids = self.tokenizer(target, add_special_tokens=False)["input_ids"]
+        # Keep every target token in the loss.
+        prompt_budget = max(0, self.max_length - len(target_ids))
+        prompt_ids = prompt_ids[-prompt_budget:] if prompt_budget else []
+        target_ids = target_ids[: self.max_length]
 
         input_ids = (prompt_ids + target_ids)[: self.max_length]
         labels = ([-100] * len(prompt_ids) + target_ids)[: self.max_length]

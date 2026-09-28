@@ -8,25 +8,17 @@ goal, so the model never has to emit it.
 import pickle
 from pathlib import Path
 
-# Solutions to return per goal. With `balanced` pruning below, section 01
-# needs far less than this: all 7885 steps across train/valid/test have the
-# correct substitution as the matcher's FIRST solution. The headroom is for
-# sections with larger, less constrained expressions.
-DEFAULT_CAP = 32
+# Solutions to return per goal. 
+DEFAULT_CAP = 8
 
-# Bound on search nodes per goal, for a conclusion with many variables and
-# few constants to anchor spans against, where naive width-guessing blows
-# up. `balanced` pruning made this mostly redundant -- section 01 now runs
-# at 27k goals/s
+# Not really necessary, but a sanity check to avoid combinatorial explosion in pathological cases.
 DEFAULT_MAX_NODES = 2_000_000
 
 PAIRS = {"(": ")", "{": "}", "[": "]", "<.": ">.", "[.": "].", "[_": "]_"}
 CLOSERS = {close: open_ for open_, close in PAIRS.items()}
 
-DEFAULT_MM = "data/set.mm"
-# mmverify.py is a vendored third-party verifier rather than method code, so
-# the residuals tree reads the baseline tree's copy instead of duplicating
-# it. Override with --mmverify if that ever stops being true.
+DEFAULT_MM = "baseline/data/set.mm"
+
 DEFAULT_MMVERIFY = "baseline/data/mmverify.py"
 DEFAULT_CACHE = "residuals/data/label_table.pkl"
 
@@ -109,13 +101,6 @@ def complete(
     """
     Every substitution s with apply_subst(pattern, s) == goal_conclusion,
     in the order proof search should try them.
-
-    Remaining ambiguity is cheap to live with: hand every solution to the
-    verifier as a separate candidate step and let it discriminate. Resolving
-    it completely would mean parsing the goal with set.mm's 1445 syntax
-    axioms and matching tree-against-tree, which is unique and linear but a
-    real parser; with `balanced` pruning most of the spurious width guesses
-    it is an optimisation, not a prerequisite.
     """
     out = []
     nodes = 0
@@ -175,9 +160,8 @@ def balanced(tokens: list) -> bool:
     for token in tokens:
         if token in PAIRS:
             stack.append(token)
-        elif token in CLOSERS:
-            if not stack or stack.pop() != CLOSERS[token]:
-                return False
+        elif token in CLOSERS and (not stack or stack.pop() != CLOSERS[token]):
+            return False
     return not stack
 
 
@@ -186,6 +170,4 @@ def determined_key(subst: dict, rvars: set) -> tuple:
     A hashable, order-independent identity for the determined half of a
     substitution, for comparing two candidate solutions.
     """
-    return tuple(
-        sorted((v, " ".join(val)) for v, val in subst.items() if v in rvars)
-    )
+    return tuple(sorted((v, " ".join(val)) for v, val in subst.items() if v in rvars))

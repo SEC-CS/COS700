@@ -184,7 +184,7 @@ if __name__ == "__main__":
         "--test",
         type=int,
         default=10,
-        help="Percentage of dataset to be used in validation set",
+        help="Percentage of dataset to be used in test set",
     )
     parser.add_argument(
         "--verbose",
