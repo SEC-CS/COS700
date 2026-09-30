@@ -120,8 +120,10 @@ proof_search_baseline size:
     --model-module models/baseline/model.py \
     --model-dir finetuning/baseline/output/{{size}}_theorems/final \
     --expansions-output results/baseline/{{size}}_expansions.csv \
+    --proved-output results/baseline/{{size}}_theorems_proved.txt \
     --attempts 1 \
     --expansions 32
+    
     
 # (size argument is either 'longest' or 'shortest')
 proof_search_modular size:
@@ -132,6 +134,7 @@ proof_search_modular size:
     --model-module models/modular/model.py \
     --model-dir finetuning/modular/output/{{size}}_theorems/ \
     --expansions-output results/modular/{{size}}_expansions.csv \
+    --proved-output results/modular/{{size}}_theorems_proved.txt \
     --attempts 1 \
     --expansions 32
 
@@ -144,6 +147,7 @@ proof_search_residual_baseline size:
     --model-module models/baseline/model.py \
     --model-dir finetuning/residual/output/{{size}}_theorems/baseline/final \
     --expansions-output results/residual/baseline/{{size}}_expansions.csv \
+    --proved-output results/residual/baseline/{{size}}_theorems_proved.txt \
     --attempts 1 \
     --expansions 32
 
@@ -156,6 +160,7 @@ proof_search_residual_modular size:
     --model-module models/modular/model.py \
     --model-dir finetuning/residual/output/{{size}}_theorems/ \
     --expansions-output results/residual/modular/{{size}}_expansions.csv \
+    --proved-output results/residual/modular/{{size}}_theorems_proved.txt \
     --attempts 1 \
     --expansions 32
 
