@@ -116,7 +116,7 @@ proof_search_baseline size:
   uv run python -m search.proof_search \
     --mm data/set.mm \
     --mmverify data/mmverify.py \
-    --eval {{data_dir}}/{{size}}_theorems/valid.jsonl \
+    --eval {{data_dir}}/{{size}}_theorems/test.jsonl \
     --model-module models/baseline/model.py \
     --model-dir finetuning/baseline/output/{{size}}_theorems/final \
     --expansions-output results/baseline/{{size}}_expansions.csv \
@@ -128,7 +128,7 @@ proof_search_modular size:
   uv run python -m search.proof_search \
     --mm data/set.mm \
     --mmverify data/mmverify.py \
-    --eval {{data_dir}}/{{size}}_theorems/valid.jsonl \
+    --eval {{data_dir}}/{{size}}_theorems/test.jsonl \
     --model-module models/modular/model.py \
     --model-dir finetuning/modular/output/{{size}}_theorems/ \
     --expansions-output results/modular/{{size}}_expansions.csv \
@@ -140,7 +140,7 @@ proof_search_residual_baseline size:
   uv run python -m search.proof_search \
     --mm data/set.mm \
     --mmverify data/mmverify.py \
-    --eval data/residual/{{size}}_theorems/valid.residual.jsonl \
+    --eval data/residual/{{size}}_theorems/test.residual.jsonl \
     --model-module models/baseline/model.py \
     --model-dir finetuning/residual/output/{{size}}_theorems/baseline/final \
     --expansions-output results/residual/baseline/{{size}}_expansions.csv \
@@ -152,7 +152,7 @@ proof_search_residual_modular size:
   uv run python -m search.proof_search \
     --mm data/set.mm \
     --mmverify data/mmverify.py \
-    --eval data/residual/{{size}}_theorems/valid.residual.jsonl \
+    --eval data/residual/{{size}}_theorems/test.residual.jsonl \
     --model-module models/modular/model.py \
     --model-dir finetuning/residual/output/{{size}}_theorems/ \
     --expansions-output results/residual/modular/{{size}}_expansions.csv \
