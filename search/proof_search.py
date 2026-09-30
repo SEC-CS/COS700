@@ -584,6 +584,7 @@ def evaluate(
     )
     avg_proof_steps = sum(r.proof_steps for r in proved_results) / max(n_proved, 1)
 
+    elapsed = time.time() - overall_start
     summary = {
         "model": model_name,
         "total_theorems": total,
@@ -594,6 +595,7 @@ def evaluate(
         "max_expansions_used": max_expansions_used,
         "avg_candidates_examined": round(avg_candidates, 1),
         "avg_proof_steps": round(avg_proof_steps, 1),
+        "elapsed_time_s": round(elapsed, 2),
         "theorems_written_to_file": theorems_written,
     }
 
@@ -602,6 +604,7 @@ def evaluate(
     print(f"{'=' * 60}")
     print(f"  Theorem success rate      : {n_proved}/{total} = {success_rate:.2f}%")
     print(f"  Avg search time (proved)  : {avg_search_time:.4f}s")
+    print(f"  Elapsed time              : {elapsed:.2f}s")
     print(
         f"  Expansions used (proved)  : avg={avg_expansions_used:.1f}, "
         f"max={max_expansions_used}  (out of a budget of "
@@ -631,6 +634,7 @@ def evaluate(
         f"Results for: {model_name}",
         f"Theorem success rate      : {n_proved}/{total} = {success_rate:.2f}%",
         f"Avg search time (proved)  : {avg_search_time:.4f}s",
+        f"Elapsed time              : {elapsed:.2f}s",
         (
             f"Expansions used (proved)  : avg={avg_expansions_used:.1f}, "
             f"max={max_expansions_used}  (out of a budget of {max_expansions})"
