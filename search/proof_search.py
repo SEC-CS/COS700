@@ -626,6 +626,32 @@ def evaluate(
         )
     print(f"{'=' * 60}")
 
+    stats_path = os.path.join(os.getcwd(), "stats.txt")
+    stats_lines = [
+        f"Results for: {model_name}",
+        f"Theorem success rate      : {n_proved}/{total} = {success_rate:.2f}%",
+        f"Avg search time (proved)  : {avg_search_time:.4f}s",
+        (
+            f"Expansions used (proved)  : avg={avg_expansions_used:.1f}, "
+            f"max={max_expansions_used}  (out of a budget of {max_expansions})"
+        ),
+        (
+            f"Avg candidates examined   : {avg_candidates:.1f} "
+            f"(over {len(active_results)} theorems with any candidates)"
+        ),
+        f"Avg proof length (steps)  : {avg_proof_steps:.1f}",
+    ]
+    if proved_output:
+        stats_lines.append(
+            f"Theorems written to file  : {theorems_written} "
+            f"(fully closed proofs only -- {proved_output})"
+        )
+    stats_lines.append("")
+    stats_lines.append(json.dumps(summary, indent=2, sort_keys=True))
+    with open(stats_path, "w", encoding="utf-8") as stats_file:
+        stats_file.write("\n".join(stats_lines) + "\n")
+    print(f"  Results written to {stats_path}")
+
     return summary, results
 
 
