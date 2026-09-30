@@ -76,7 +76,7 @@ def load_dataset(filepath: str | Path, verbose=False) -> defaultdict:
 # ------------------------------------------------------------
 def build_theorem_split(
     theorems: list, percent_valid: int, percent_test: int, verbose=False
-) -> dict[str, set]:
+) -> dict[str, list]:
     assert 0 <= percent_valid <= 100
     assert 0 <= percent_test <= 100
     assert percent_valid + percent_test <= 100
@@ -88,9 +88,9 @@ def build_theorem_split(
     index_valid = len(theorems) * percent_valid // 100
     index_test = index_valid + (len(theorems) * percent_test // 100)
 
-    valid = set(sampled[:index_valid])
-    test = set(sampled[index_valid:index_test])
-    train = set(sampled[index_test:])
+    valid = (sampled[:index_valid])
+    test = (sampled[index_valid:index_test])
+    train = (sampled[index_test:])
 
     if verbose:
         print("Split")
@@ -109,7 +109,7 @@ def build_theorem_split(
 # Write datasets
 # ------------------------------------------------------------
 def output_to_file(
-    splits: dict[str, set], theorems: defaultdict, output_dir: str | Path, verbose=False
+    splits: dict[str, list], theorems: defaultdict, output_dir: str | Path, verbose=False
 ):
     step_counts = {}
 
