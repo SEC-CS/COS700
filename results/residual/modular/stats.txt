@@ -1,0 +1,22 @@
+Results for: learned_model
+Theorem success rate      : 75/854 = 8.78%
+Avg search time (proved)  : 2.8085s
+Elapsed time              : 18214.19s
+Expansions used (proved)  : avg=2.3, max=13  (out of a budget of 32)
+Avg candidates examined   : 28.1 (over 854 theorems with any candidates)
+Avg proof length (steps)  : 3.7
+Theorems written to file  : 75 (fully closed proofs only -- results/residual/modular/longest_theorems_proved.txt)
+
+{
+  "avg_candidates_examined": 28.1,
+  "avg_expansions_used": 2.3,
+  "avg_proof_steps": 3.7,
+  "avg_search_time_s": 2.8085,
+  "elapsed_time_s": 18214.19,
+  "max_expansions_used": 13,
+  "model": "learned_model",
+  "proved": 75,
+  "theorem_success_rate_%": 8.78,
+  "theorems_written_to_file": 75,
+  "total_theorems": 854
+}

@@ -44,7 +44,19 @@ import time
 from dataclasses import dataclass, field
 from typing import Optional
 
-from utils.formatting import format_goal, parse_goal, parse_proofstep
+from utils.formatting import (
+    format_goal,
+    format_proofstep,
+    parse_goal,
+    parse_proofstep,
+)
+from utils.matcher import (
+    DEFAULT_CACHE,
+    DEFAULT_CAP,
+    complete,
+    determined_key,
+    label_table,
+)
 
 
 def load_mmverify(path: str):
@@ -56,7 +68,12 @@ def load_mmverify(path: str):
     return mod
 
 
-def load_model_from_module(module_path: str, mm, model_dir: str | None = None):
+def load_model_from_module(
+    module_path: str,
+    mm,
+    model_dir: str | None = None,
+    base_model_module: str | None = None,
+):
     """
     Load a model from an external Python file.
 
@@ -74,11 +91,31 @@ def load_model_from_module(module_path: str, mm, model_dir: str | None = None):
         )
 
     print(f"Loading model from {module_path} ...")
-    model = mod.Model(model_dir=model_dir) if model_dir else mod.Model()
+    if base_model_module is not None:
+        model = mod.Model(model_dir=model_dir, base_model_module=base_model_module)
+    else:
+        model = mod.Model(model_dir=model_dir) if model_dir else mod.Model()
     if hasattr(model, "set_mm"):
         model.set_mm(mm)
     print("Model loaded.")
     return model
+
+
+def load_module_from_path(module_path: str):
+    """Import a Python module from a file path."""
+    spec = importlib.util.spec_from_file_location("user_model_module", module_path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def detect_model_module_from_argv(argv: list[str]) -> str | None:
+    for i, arg in enumerate(argv):
+        if arg == "--model-module" and i + 1 < len(argv):
+            return argv[i + 1]
+        if arg.startswith("--model-module="):
+            return arg.split("=", 1)[1]
+    return None
 
 class MetamathVerifier:
     """
@@ -747,6 +784,17 @@ def main(add_args=None, wrap_model=None, doc=None):
         "--model-dir",
          help="Directory containing the trained model weights"
     )
+
+    # Allow a model module to contribute its own CLI arguments and wrapping
+    # logic without requiring a separate search entrypoint.
+    model_module = detect_model_module_from_argv(sys.argv[1:])
+    if model_module and add_args is None:
+        module = load_module_from_path(model_module)
+        if hasattr(module, "add_args"):
+            add_args = module.add_args
+        if hasattr(module, "wrap_model"):
+            wrap_model = module.wrap_model
+
     if add_args is not None:
         add_args(parser)
     args = parser.parse_args()
@@ -772,7 +820,12 @@ def main(add_args=None, wrap_model=None, doc=None):
     models = {}
 
     if args.model_module:
-        learned = load_model_from_module(args.model_module, mm, model_dir=args.model_dir)
+        learned = load_model_from_module(
+            args.model_module,
+            mm,
+            model_dir=args.model_dir,
+            base_model_module=getattr(args, "base_model_module", None),
+        )
         if wrap_model is not None:
             learned = wrap_model(learned, mm, args)
         models[args.model_name] = learned

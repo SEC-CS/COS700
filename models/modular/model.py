@@ -70,6 +70,12 @@ class Model:
 
         has_cuda = torch.cuda.is_available()
         self.device = torch.device("cuda" if has_cuda else "cpu")
+        if has_cuda:
+            self.compute_dtype = (
+                torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
+            )
+        else:
+            self.compute_dtype = torch.float32
 
         print(f"Loading theorem classifier from {theorem_dir} ...")
         self.theorem_tokenizer = AutoTokenizer.from_pretrained(theorem_dir)
@@ -78,7 +84,7 @@ class Model:
         if self.theorem_tokenizer.pad_token is None:
             self.theorem_tokenizer.pad_token = self.theorem_tokenizer.eos_token
         self.theorem_model = AutoModelForSequenceClassification.from_pretrained(
-            theorem_dir
+            theorem_dir, dtype=self.compute_dtype
         ).to(self.device)
         self.theorem_model.eval()
         # config.json stores id2label; JSON keys may come back as strings,
@@ -89,10 +95,11 @@ class Model:
 
         print(f"Loading substitution model from {substitution_dir} ...")
         self.substitution_tokenizer = AutoTokenizer.from_pretrained(substitution_dir)
+        self.substitution_tokenizer.padding_side = "left"
         if self.substitution_tokenizer.pad_token is None:
             self.substitution_tokenizer.pad_token = self.substitution_tokenizer.eos_token
         self.substitution_model = AutoModelForCausalLM.from_pretrained(
-            substitution_dir
+            substitution_dir, dtype=self.compute_dtype
         ).to(self.device)
         self.substitution_model.eval()
 
@@ -158,22 +165,35 @@ class Model:
     # -----------------------------------------------------------------
 
     def _sample_substitutions(
-        self, goal_str: str, theorem: str, n: int, temperature: float
-    ) -> list[tuple[str, float]]:
+        self,
+        goal_str: str,
+        theorem_candidates: list[tuple[str, float]],
+        n: int,
+        temperature: float,
+    ) -> list[tuple[str, float, float]]:
         """
-        Returns up to n (substitution_text, logprob) pairs for this
-        (goal, theorem) pair. logprob is the summed log-probability the
-        model assigned to the generated tokens, so it's directly
-        comparable across different candidates and lengths in the same
-        way a causal LM's sequence log-probability normally is.
+        Samples substitutions for all theorem prompts in one generation
+        batch. Each result is (theorem, substitution_text, combined_logprob).
         """
-        info = self._theorem_info(theorem)
-        if info is None:
+        prompts = []
+        prompt_theorems = []
+        for theorem, theorem_logprob in theorem_candidates:
+            info = self._theorem_info(theorem)
+            if info is None:
+                continue
+            prompts.append(
+                SUBSTITUTION_PROMPT_TEMPLATE.format(goal=goal_str, **info)
+            )
+            prompt_theorems.append((theorem, theorem_logprob))
+
+        if not prompts:
             return []
 
-        prompt = SUBSTITUTION_PROMPT_TEMPLATE.format(goal=goal_str, **info)
         inputs = self.substitution_tokenizer(
-            prompt, add_special_tokens=False, return_tensors="pt"
+            prompts,
+            add_special_tokens=False,
+            padding=True,
+            return_tensors="pt",
         ).to(self.device)
         prompt_len = inputs["input_ids"].shape[1]
 
@@ -183,7 +203,7 @@ class Model:
         do_sample = temperature > 0
         num_return_sequences = n if do_sample else 1
 
-        with torch.no_grad():
+        with torch.inference_mode():
             outputs = self.substitution_model.generate(
                 **inputs,
                 max_new_tokens=MAX_NEW_SUBSTITUTION_TOKENS,
@@ -201,7 +221,11 @@ class Model:
 
         eos_id = self.substitution_tokenizer.eos_token_id
         results = []
-        for sequence, scores in zip(outputs.sequences, transition_scores):
+        for output_index, (sequence, scores) in enumerate(
+            zip(outputs.sequences, transition_scores)
+        ):
+            prompt_index = output_index // num_return_sequences
+            theorem, theorem_logprob = prompt_theorems[prompt_index]
             generated_ids = sequence[prompt_len:]
 
             # Truncate at the first EOS: anything after it is just
@@ -214,7 +238,7 @@ class Model:
                 generated_ids[:length], skip_special_tokens=True
             ).strip()
             logprob = scores[:length].sum().item()
-            results.append((text, logprob))
+            results.append((theorem, text, theorem_logprob + logprob))
 
         return results
 
@@ -240,21 +264,17 @@ class Model:
         # dropped below), which is fine -- proof_search.py just works
         # with however many valid candidates come back.
         per_theorem = max(1, -(-n // len(theorem_candidates)))  # ceil division
-
         candidates = []
-        for theorem, theorem_logprob in theorem_candidates:
-            for substitution_text, substitution_logprob in self._sample_substitutions(
-                goal_str, theorem, per_theorem, temperature
-            ):
-                substitution = parse_substitution(substitution_text)
-                if not substitution:
-                    # Malformed generation (or None substitution) --
-                    # skip rather than hand proof_search.py a step
-                    # string that could never verify anyway.
-                    continue
-                step_str = f"{theorem} {substitution_text}"
-                combined_logprob = theorem_logprob + substitution_logprob
-                candidates.append((step_str, combined_logprob))
+        for theorem, substitution_text, combined_logprob in self._sample_substitutions(
+            goal_str, theorem_candidates, per_theorem, temperature
+        ):
+            substitution = parse_substitution(substitution_text)
+            if not substitution and not getattr(self, "allow_empty_substitution", False):
+                # Malformed generation (or None substitution) -- skip rather
+                # than return a step that could never verify.
+                continue
+            step_str = f"{theorem} {substitution_text}"
+            candidates.append((step_str, combined_logprob))
 
         # Best candidates first, then cap at n as promised by the
         # interface, since we may have generated slightly more than n

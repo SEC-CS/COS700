@@ -48,8 +48,15 @@ def main():
         from finetuning.modular.scripts.train_model_thm import main as run
         run(doc=__doc__, output_dir=output_dir)
     else:
-        from finetuning.modular.scripts.train_model_sub import main as run
-        run(doc=__doc__, output_dir=output_dir)
+        from finetuning.modular.scripts.train_model_sub import (
+            ResidualSubstitutionDataset,
+            main as run,
+        )
+        run(
+            dataset_cls=ResidualSubstitutionDataset,
+            doc=__doc__,
+            output_dir=output_dir,
+        )
 
 if __name__ == "__main__":
     main()

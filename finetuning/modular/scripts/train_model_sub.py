@@ -225,6 +225,9 @@ class SubstitutionDataset(Dataset):
     theorem's name itself.
     """
 
+    def target_text(self, record: dict) -> str:
+        return format_substitution(record["substitution"])
+
     def __init__(
         self,
         jsonl_path: str,
@@ -247,7 +250,7 @@ class SubstitutionDataset(Dataset):
                 try:
                     goal = record["goal"]
                     theorem = record["theorem"]
-                    substitution_text = format_substitution(record["substitution"])
+                    substitution_text = self.target_text(record)
                 except KeyError as e:
                     raise KeyError(f"{jsonl_path}:{line_no} is missing field {e}") from e
 
@@ -261,6 +264,7 @@ class SubstitutionDataset(Dataset):
                 self.examples.append(
                     (goal, theorem_info_cache[theorem], substitution_text)
                 )
+
 
         if skipped_unknown_theorem:
             print(
@@ -291,6 +295,19 @@ class SubstitutionDataset(Dataset):
             "labels": labels,
             "attention_mask": [1] * len(input_ids),
         }
+
+
+class ResidualSubstitutionDataset(SubstitutionDataset):
+    """Residual JSONL stores the already-completed target in `target`.
+
+    The modular-sub training pipeline should learn to predict that residual
+    target directly rather than reconstructing it from the full substitution.
+    """
+
+    def target_text(self, record: dict) -> str:
+        if "target" in record:
+            return format_substitution(parse_substitution(record["target"]))
+        return super().target_text(record)
 
 
 class PadCollator:

@@ -144,8 +144,11 @@ proof_search_residual_baseline size:
     --mm data/set.mm \
     --mmverify data/mmverify.py \
     --eval data/residual/{{size}}_theorems/test.residual.jsonl \
-    --model-module models/baseline/model.py \
+    --model-module models/residual/model.py \
+    --base-model-module models/baseline/model.py \
     --model-dir finetuning/residual/output/{{size}}_theorems/baseline/final \
+    --label-table data/residual/label_table.pkl \
+    --cap 8 \
     --expansions-output results/residual/baseline/{{size}}_expansions.csv \
     --proved-output results/residual/baseline/{{size}}_theorems_proved.txt \
     --attempts 1 \
@@ -157,8 +160,11 @@ proof_search_residual_modular size:
     --mm data/set.mm \
     --mmverify data/mmverify.py \
     --eval data/residual/{{size}}_theorems/test.residual.jsonl \
-    --model-module models/modular/model.py \
+    --model-module models/residual/model.py \
+    --base-model-module models/modular/model.py \
     --model-dir finetuning/residual/output/{{size}}_theorems/ \
+    --label-table data/residual/label_table.pkl \
+    --cap 8 \
     --expansions-output results/residual/modular/{{size}}_expansions.csv \
     --proved-output results/residual/modular/{{size}}_theorems_proved.txt \
     --attempts 1 \
