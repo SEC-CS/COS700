@@ -9,7 +9,7 @@ import pickle
 from pathlib import Path
 
 # Solutions to return per goal. 
-DEFAULT_CAP = 8
+DEFAULT_CAP = 3
 
 # Not really necessary, but a sanity check to avoid combinatorial explosion in pathological cases.
 DEFAULT_MAX_NODES = 2_000_000

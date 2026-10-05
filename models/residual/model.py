@@ -41,6 +41,11 @@ class Model:
         if hasattr(self.model, "set_mm"):
             self.model.set_mm(mm)
 
+    def set_empty_substitution_labels(self, labels: set[str]) -> None:
+        setter = getattr(self.model, "set_empty_substitution_labels", None)
+        if setter is not None:
+            setter(labels)
+
     def generate_steps(self, goal_str: str, n: int = 32, temperature: float = 1.0):
         return self.model.generate_steps(goal_str, n=n, temperature=temperature)
 
@@ -53,9 +58,47 @@ class ResidualModel:
         self.table = table
         self.cap = cap
         self.excluded_labels = set()
+        set_empty_substitution_labels = getattr(
+            model, "set_empty_substitution_labels", None
+        )
+        if set_empty_substitution_labels is not None:
+            set_empty_substitution_labels(
+                {
+                    label
+                    for label, info in table.items()
+                    if not (set(info["kinds"]) - info["rvars"])
+                }
+            )
 
     def set_excluded_labels(self, labels: set[str]) -> None:
         self.excluded_labels = set(labels)
+
+    def candidate_group_key(self, step_str: str) -> tuple:
+        parsed = parse_proofstep(step_str)
+        if parsed is None:
+            return (step_str,)
+
+        label = parsed["theorem"]
+        info = self.table.get(label)
+        if info is None:
+            return (
+                label,
+                tuple(
+                    sorted(
+                        (var, tuple(value))
+                        for var, value in parsed["subst"].items()
+                    )
+                ),
+            )
+
+        residual = tuple(
+            sorted(
+                (var, tuple(value))
+                for var, value in parsed["subst"].items()
+                if var not in info["rvars"]
+            )
+        )
+        return label, residual
 
     def generate_steps(self, goal_str: str, n: int = 32, temperature: float = 1.0):
         out = []
@@ -89,6 +132,12 @@ class ResidualModel:
         info = self.table.get(label)
         if info is None:
             return []
+
+        residual = {
+            var: value
+            for var, value in residual.items()
+            if var not in info["rvars"]
+        }
 
         steps = []
         seen = set()

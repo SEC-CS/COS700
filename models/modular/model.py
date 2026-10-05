@@ -18,6 +18,11 @@ K_THEOREMS = int(os.environ.get("K_THEOREMS", "5"))
 MAX_NEW_SUBSTITUTION_TOKENS = int(os.environ.get("MAX_NEW_SUBSTITUTION_TOKENS", "64"))
 # Should match --max-length used when training the classifier.
 THEOREM_MAX_LENGTH = int(os.environ.get("THEOREM_MAX_LENGTH", "400"))
+SUBSTITUTION_PROMPT_BATCH_SIZE = int(
+    os.environ.get("SUBSTITUTION_PROMPT_BATCH_SIZE", "5")
+)
+if SUBSTITUTION_PROMPT_BATCH_SIZE < 1:
+    raise ValueError("SUBSTITUTION_PROMPT_BATCH_SIZE must be at least 1")
 
 # Must match PROMPT_TEMPLATE in train_model_sub.py exactly -- the
 # substitution model was trained to expect this exact prompt shape.
@@ -105,10 +110,14 @@ class Model:
 
         self.mm = None  # set via set_mm(); needed for the substitution prompt
         self._theorem_info_cache = {}
+        self.empty_substitution_labels = set()
 
     def set_mm(self, mm):
         self.mm = mm
         self._theorem_info_cache = {}
+
+    def set_empty_substitution_labels(self, labels: set[str]) -> None:
+        self.empty_substitution_labels = set(labels)
 
     # -----------------------------------------------------------------
     # Theorem structural info (from the .mm database)
@@ -177,7 +186,11 @@ class Model:
         """
         prompts = []
         prompt_theorems = []
+        results = []
         for theorem, theorem_logprob in theorem_candidates:
+            if theorem in self.empty_substitution_labels:
+                results.append((theorem, "", theorem_logprob))
+                continue
             info = self._theorem_info(theorem)
             if info is None:
                 continue
@@ -187,58 +200,63 @@ class Model:
             prompt_theorems.append((theorem, theorem_logprob))
 
         if not prompts:
-            return []
-
-        inputs = self.substitution_tokenizer(
-            prompts,
-            add_special_tokens=False,
-            padding=True,
-            return_tensors="pt",
-        ).to(self.device)
-        prompt_len = inputs["input_ids"].shape[1]
+            return results
 
         # Greedy decoding can't produce multiple distinct return
         # sequences, so temperature<=0 falls back to a single greedy
         # candidate for this theorem instead of n sampled ones.
         do_sample = temperature > 0
         num_return_sequences = n if do_sample else 1
+        eos_id = self.substitution_tokenizer.eos_token_id
+        for start in range(0, len(prompts), SUBSTITUTION_PROMPT_BATCH_SIZE):
+            prompt_batch = prompts[start : start + SUBSTITUTION_PROMPT_BATCH_SIZE]
+            theorem_batch = prompt_theorems[
+                start : start + SUBSTITUTION_PROMPT_BATCH_SIZE
+            ]
+            inputs = self.substitution_tokenizer(
+                prompt_batch,
+                add_special_tokens=False,
+                padding=True,
+                return_tensors="pt",
+            ).to(self.device)
+            prompt_len = inputs["input_ids"].shape[1]
 
-        with torch.inference_mode():
-            outputs = self.substitution_model.generate(
-                **inputs,
-                max_new_tokens=MAX_NEW_SUBSTITUTION_TOKENS,
-                do_sample=do_sample,
-                temperature=temperature if do_sample else None,
-                num_return_sequences=num_return_sequences,
-                output_scores=True,
-                return_dict_in_generate=True,
-                pad_token_id=self.substitution_tokenizer.pad_token_id,
+            with torch.inference_mode():
+                outputs = self.substitution_model.generate(
+                    **inputs,
+                    max_new_tokens=MAX_NEW_SUBSTITUTION_TOKENS,
+                    do_sample=do_sample,
+                    temperature=temperature if do_sample else None,
+                    num_return_sequences=num_return_sequences,
+                    output_scores=True,
+                    return_dict_in_generate=True,
+                    pad_token_id=self.substitution_tokenizer.pad_token_id,
+                )
+
+            transition_scores = self.substitution_model.compute_transition_scores(
+                outputs.sequences, outputs.scores, normalize_logits=True
             )
 
-        transition_scores = self.substitution_model.compute_transition_scores(
-            outputs.sequences, outputs.scores, normalize_logits=True
-        )
+            for output_index, (sequence, scores) in enumerate(
+                zip(outputs.sequences, transition_scores)
+            ):
+                prompt_index = output_index // num_return_sequences
+                theorem, theorem_logprob = theorem_batch[prompt_index]
+                generated_ids = sequence[prompt_len:]
 
-        eos_id = self.substitution_tokenizer.eos_token_id
-        results = []
-        for output_index, (sequence, scores) in enumerate(
-            zip(outputs.sequences, transition_scores)
-        ):
-            prompt_index = output_index // num_return_sequences
-            theorem, theorem_logprob = prompt_theorems[prompt_index]
-            generated_ids = sequence[prompt_len:]
+                # Ignore padding after a sequence's first EOS token.
+                eos_positions = (generated_ids == eos_id).nonzero()
+                length = (
+                    eos_positions[0].item()
+                    if len(eos_positions)
+                    else len(generated_ids)
+                )
 
-            # Truncate at the first EOS: anything after it is just
-            # batch padding from a shorter sequence sharing this batch,
-            # not something the model actually "chose" to generate.
-            eos_positions = (generated_ids == eos_id).nonzero()
-            length = eos_positions[0].item() if len(eos_positions) else len(generated_ids)
-
-            text = self.substitution_tokenizer.decode(
-                generated_ids[:length], skip_special_tokens=True
-            ).strip()
-            logprob = scores[:length].sum().item()
-            results.append((theorem, text, theorem_logprob + logprob))
+                text = self.substitution_tokenizer.decode(
+                    generated_ids[:length], skip_special_tokens=True
+                ).strip()
+                logprob = scores[:length].sum().item()
+                results.append((theorem, text, theorem_logprob + logprob))
 
         return results
 

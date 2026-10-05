@@ -122,7 +122,8 @@ proof_search_baseline size:
     --expansions-output results/baseline/{{size}}_expansions.csv \
     --proved-output results/baseline/{{size}}_theorems_proved.txt \
     --attempts 1 \
-    --expansions 32
+    --expansions 32 \
+    --max-valid-per-goal 3
     
     
 # (size argument is either 'longest' or 'shortest')
@@ -136,7 +137,8 @@ proof_search_modular size:
     --expansions-output results/modular/{{size}}_expansions.csv \
     --proved-output results/modular/{{size}}_theorems_proved.txt \
     --attempts 1 \
-    --expansions 32
+    --expansions 32 \
+    --max-valid-per-goal 3
 
 # (size argument is either 'longest' or 'shortest')
 proof_search_residual_baseline size:
@@ -148,14 +150,15 @@ proof_search_residual_baseline size:
     --base-model-module models/baseline/model.py \
     --model-dir finetuning/residual/output/{{size}}_theorems/baseline/final \
     --label-table data/residual/label_table.pkl \
-    --cap 8 \
+    --cap 3 \
     --expansions-output results/residual/baseline/{{size}}_expansions.csv \
     --proved-output results/residual/baseline/{{size}}_theorems_proved.txt \
     --attempts 1 \
-    --expansions 32
+    --expansions 32 \
+    --max-valid-per-goal 3
 
 # (size argument is either 'longest' or 'shortest')
-proof_search_residual_modular size:
+proof_search_residual_modular size attempts="1" temperature="1.0" max_valid_per_goal="3":
   uv run python -m search.proof_search \
     --mm data/set.mm \
     --mmverify data/mmverify.py \
@@ -164,11 +167,13 @@ proof_search_residual_modular size:
     --base-model-module models/modular/model.py \
     --model-dir finetuning/residual/output/{{size}}_theorems/ \
     --label-table data/residual/label_table.pkl \
-    --cap 8 \
+    --cap 3 \
     --expansions-output results/residual/modular/{{size}}_expansions.csv \
     --proved-output results/residual/modular/{{size}}_theorems_proved.txt \
-    --attempts 1 \
-    --expansions 32
+    --attempts {{attempts}} \
+    --expansions 32 \
+    --temperature {{temperature}} \
+    --max-valid-per-goal {{max_valid_per_goal}}
 
 all:
   just data

@@ -222,6 +222,7 @@ def proof_search(
     demo: bool = False,
     heartbeat_every: int = 20,
     excluded_labels: set[str] = None,
+    max_valid_per_goal: int = 1,
 ) -> tuple[Optional[dict], dict]:
     """
     Run a proof search for a single goal using Best-First Search.
@@ -242,6 +243,9 @@ def proof_search(
     }
     """
     start_time = time.time()
+    if max_valid_per_goal < 1:
+        raise ValueError("max_valid_per_goal must be at least 1")
+
     excluded_labels = excluded_labels or set()
 
     # Residual models can avoid expensive completion for labels that are not
@@ -314,10 +318,34 @@ def proof_search(
 
         proof_tree.setdefault(goal_str, [])
 
+        valid_candidate_ranks = {}
         for step_str, step_logprob in candidates:
             parsed_step = parse_proofstep(step_str)
             if parsed_step is not None and parsed_step["theorem"] in excluded_labels:
                 continue
+
+            candidate_key_fn = getattr(model, "candidate_group_key", None)
+            if candidate_key_fn is not None:
+                candidate_key = candidate_key_fn(step_str)
+            elif parsed_step is not None:
+                candidate_key = (
+                    parsed_step["theorem"],
+                    tuple(
+                        sorted(
+                            (var, tuple(value))
+                            for var, value in parsed_step["subst"].items()
+                        )
+                    ),
+                )
+            else:
+                candidate_key = step_str
+
+            if (
+                len(valid_candidate_ranks) >= max_valid_per_goal
+                and candidate_key not in valid_candidate_ranks
+            ):
+                break
+
             candidates_examined += 1
             if demo:
                 print(f"  Trying: {step_str}  (logprob={step_logprob:.2f})")
@@ -329,6 +357,10 @@ def proof_search(
                 continue
 
             valid_tactics_found += 1
+            candidate_rank = valid_candidate_ranks.get(candidate_key)
+            if candidate_rank is None:
+                candidate_rank = len(valid_candidate_ranks) + 1
+                valid_candidate_ranks[candidate_key] = candidate_rank
             if verbose:
                 print(f"  Valid tactic. Subgoals: {len(subgoals)}")
             if demo:
@@ -339,7 +371,13 @@ def proof_search(
                 else:
                     print(f"    -> valid, no subgoals remaining (closed)")
 
-            proof_tree[goal_str].append({"step": step_str, "subgoals": subgoals})
+            proof_tree[goal_str].append(
+                {
+                    "step": step_str,
+                    "subgoals": subgoals,
+                    "candidate_rank": candidate_rank,
+                }
+            )
 
             child_logprob = entry.cumulative_logprob + step_logprob
             for subgoal in subgoals:
@@ -371,10 +409,6 @@ def proof_search(
                     "proved": True,
                 }
                 return proof_tree, metrics
-
-            # Best-First Search: Commit to the first valid tactic found for
-            # this goal expansion and move on to the next highest-priority node.
-            break
 
     elapsed = time.time() - start_time
     metrics = {
@@ -481,6 +515,8 @@ def evaluate(
     expansions_output: str = None,
     progress_every: int = 1,
     heartbeat_every: int = 20,
+    temperature: float = 1.0,
+    max_valid_per_goal: int = 1,
 ) -> tuple[dict, list[TheoremResult]]:
     """
     Evaluate the prover on a split and collect all metrics.
@@ -499,7 +535,8 @@ def evaluate(
     total = len(theorem_order)
     print(
         f"\nEvaluating '{model_name}' on {total} theorems "
-        f"({attempts} attempts each, max {max_expansions} expansions) ...",
+        f"({attempts} attempts each, max {max_expansions} expansions, "
+        f"up to {max_valid_per_goal} valid candidates per goal) ...",
         flush=True,
     )
 
@@ -514,7 +551,9 @@ def evaluate(
     expansions_file = None
     if expansions_output:
         expansions_file = open(expansions_output, "w")
-        expansions_file.write("proof_label,expansions\n")
+        expansions_file.write(
+            "proof_label,expansions,non_first_candidate_steps,max_candidate_rank\n"
+        )
 
     for i, label in enumerate(theorem_order):
         root_goal = theorem_goals[label]
@@ -530,6 +569,8 @@ def evaluate(
         total_candidates = 0
         proof_steps = 0
         attempts_used = 0
+        non_first_candidate_steps = 0
+        max_candidate_rank = 0
 
         for _ in range(attempts):
             attempts_used += 1
@@ -539,6 +580,8 @@ def evaluate(
                 verifier=verifier,
                 max_expansions=max_expansions,
                 n_tactics=n_tactics,
+                max_valid_per_goal=max_valid_per_goal,
+                temperature=temperature,
                 verbose=verbose,
                 demo=demo,
                 heartbeat_every=heartbeat_every,
@@ -553,10 +596,29 @@ def evaluate(
                 proved = True
                 best_time = metrics["search_time_s"]
                 best_expansions = metrics["expansions"]
-                if expansions_file is not None:
-                    expansions_file.write(f"{label},{best_expansions}\n")
                 clean_proof = extract_proof(root_goal, proof_tree)
                 proof_steps = count_proof_steps(clean_proof)
+                if clean_proof is not None:
+                    candidate_ranks = [
+                        step.get("candidate_rank", 1)
+                        for step in clean_proof.values()
+                    ]
+                    non_first_candidate_steps = sum(
+                        rank > 1 for rank in candidate_ranks
+                    )
+                    max_candidate_rank = max(candidate_ranks, default=1)
+                    if expansions_file is not None:
+                        expansions_file.write(
+                            f"{label},{best_expansions},"
+                            f"{non_first_candidate_steps},{max_candidate_rank}\n"
+                        )
+                        expansions_file.flush()
+                    print(
+                        f"  PROVED {label}: selected path uses "
+                        f"{non_first_candidate_steps} non-first candidate "
+                        f"step(s), max candidate rank {max_candidate_rank}",
+                        flush=True,
+                    )
                 if proved_file is not None and clean_proof is not None:
                     # write total number of expansions used for this theorem too
                     proved_file.write(
@@ -564,6 +626,7 @@ def evaluate(
                             label, root_goal, clean_proof, total_expansions
                         )
                     )
+                    proved_file.flush()
                     theorems_written += 1
 
                 break
@@ -738,6 +801,8 @@ def main(add_args=None, wrap_model=None, doc=None):
     parser.add_argument("--attempts", type=int, default=4)
     parser.add_argument("--expansions", type=int, default=128)
     parser.add_argument("--tactics", type=int, default=32)
+    parser.add_argument("--max-valid-per-goal", type=int, default=1)
+    parser.add_argument("--temperature", type=float, default=1.0)
     parser.add_argument("--verbose", action="store_true")
     parser.add_argument(
         "--demo",
@@ -799,6 +864,9 @@ def main(add_args=None, wrap_model=None, doc=None):
         add_args(parser)
     args = parser.parse_args()
 
+    if args.max_valid_per_goal < 1:
+        parser.error("--max-valid-per-goal must be at least 1")
+
     if not args.goal and not args.eval:
         print("ERROR: supply either --goal or --eval")
         sys.exit(1)
@@ -841,6 +909,7 @@ def main(add_args=None, wrap_model=None, doc=None):
             verifier=verifier,
             max_expansions=args.expansions,
             n_tactics=args.tactics,
+            max_valid_per_goal=args.max_valid_per_goal,
             verbose=args.verbose,
             demo=args.demo,
             heartbeat_every=args.heartbeat_every,
@@ -870,6 +939,8 @@ def main(add_args=None, wrap_model=None, doc=None):
             attempts=args.attempts,
             max_expansions=args.expansions,
             n_tactics=args.tactics,
+            max_valid_per_goal=args.max_valid_per_goal,
+            temperature=args.temperature,
             verbose=args.verbose,
             demo=args.demo,
             proved_output=args.proved_output,
