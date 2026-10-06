@@ -294,8 +294,12 @@ class Model:
             step_str = f"{theorem} {substitution_text}"
             candidates.append((step_str, combined_logprob))
 
-        # Best candidates first, then cap at n as promised by the
-        # interface, since we may have generated slightly more than n
-        # across all theorems due to the ceil division above.
-        candidates.sort(key=lambda pair: pair[1], reverse=True)
-        return candidates[:n]
+        # Keep the highest-probability occurrence of each exact proof step:
+        # repeated samples otherwise trigger redundant verifier work.
+        best_by_step = {}
+        for step_str, logprob in candidates:
+            if step_str not in best_by_step or logprob > best_by_step[step_str]:
+                best_by_step[step_str] = logprob
+
+        ranked = sorted(best_by_step.items(), key=lambda pair: pair[1], reverse=True)
+        return ranked[:n]

@@ -266,24 +266,20 @@ def proof_search(
     )
     in_queue = {root_goal_str}
 
-    def is_proved(goal: str, visiting: set = None) -> bool:
-        if visiting is None:
-            visiting = set()
-        if goal in closed:
-            return True
-        if goal not in proof_tree or not proof_tree[goal]:
-            return False
-        if goal in visiting:
-            return False  # cycle — can't prove a goal via itself
-        visiting.add(goal)
-        result = any(
-            all(is_proved(sg, visiting) for sg in alt["subgoals"])
-            for alt in proof_tree[goal]
-        )
-        visiting.discard(goal)
-        if result:
-            closed.add(goal)
-        return result
+    def root_proved() -> bool:
+        changed = True
+        while changed:
+            changed = False
+            for goal, alternatives in proof_tree.items():
+                if goal in closed:
+                    continue
+                if any(
+                    all(subgoal in closed for subgoal in alt["subgoals"])
+                    for alt in alternatives
+                ):
+                    closed.add(goal)
+                    changed = True
+        return root_goal_str in closed
 
     while heap and expansions < max_expansions:
         entry = heapq.heappop(heap)
@@ -319,7 +315,12 @@ def proof_search(
         proof_tree.setdefault(goal_str, [])
 
         valid_candidate_ranks = {}
+        seen_steps = set()
         for step_str, step_logprob in candidates:
+            if step_str in seen_steps:
+                continue
+            seen_steps.add(step_str)
+
             parsed_step = parse_proofstep(step_str)
             if parsed_step is not None and parsed_step["theorem"] in excluded_labels:
                 continue
@@ -397,7 +398,7 @@ def proof_search(
             if not subgoals:
                 closed.add(goal_str)
 
-            if is_proved(root_goal_str):
+            if root_proved():
                 if demo:
                     print(f"\nRoot goal proved after {expansions} expansion(s).")
                 elapsed = time.time() - start_time
