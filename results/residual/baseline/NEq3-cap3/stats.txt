@@ -1,0 +1,30 @@
+Results for: learned_model (concatenated baseline residual search)
+Search configuration: 32 candidates, up to 3 valid candidates per goal, cap 3, 32 expansions, 1 attempt
+Theorem success rate      : 132/854 = 15.46% (search results marked proved)
+Fully closed proof blocks : 131 (written to longest_theorems_proved.txt)
+Expansion records         : 131 (unique proof labels)
+Elapsed time              : approximately 13h12m (sum of three run logs; interrupted segment durations rounded)
+Expansions used (recorded closed proofs): avg=5.2, max=30 (out of a budget of 32)
+Proofs using non-first candidates: 59/131
+Maximum candidate rank in a recorded proof: 3
+Avg proof length (recorded closed proofs): 3.2 steps
+Avg search time (proved)  : unavailable for the concatenated run (not retained for interrupted segments)
+Avg candidates examined   : unavailable for the concatenated run (not retained for interrupted segments)
+
+{
+  "avg_candidates_examined": null,
+  "avg_expansions_used": 5.2,
+  "avg_proof_steps": 3.2,
+  "avg_search_time_s": null,
+  "elapsed_time_s_approx": 47550,
+  "expansion_records": 131,
+  "max_candidate_rank": 3,
+  "max_expansions_used": 30,
+  "model": "learned_model",
+  "non_first_candidate_proofs": 59,
+  "proved": 132,
+  "proof_blocks_written": 131,
+  "theorem_success_rate_%": 15.46,
+  "theorems_written_to_file": 131,
+  "total_theorems": 854
+}
