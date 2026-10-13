@@ -1,0 +1,22 @@
+Results for: learned_model
+Theorem success rate      : 132/854 = 15.46%
+Avg search time (proved)  : 10.9433s
+Elapsed time              : 56070.19s
+Expansions used (proved)  : avg=5.2, max=28  (out of a budget of 32)
+Avg candidates examined   : 155.3 (over 848 theorems with any candidates)
+Avg proof length (steps)  : 5.5
+Theorems written to file  : 132 (fully closed proofs only -- results/baseline/longest_theorems_proved_Baseline_second.txt)
+
+{
+  "avg_candidates_examined": 155.3,
+  "avg_expansions_used": 5.2,
+  "avg_proof_steps": 5.5,
+  "avg_search_time_s": 10.9433,
+  "elapsed_time_s": 56070.19,
+  "max_expansions_used": 28,
+  "model": "learned_model",
+  "proved": 132,
+  "theorem_success_rate_%": 15.46,
+  "theorems_written_to_file": 132,
+  "total_theorems": 854
+}

@@ -1,0 +1,22 @@
+Results for: learned_model
+Theorem success rate      : 121/854 = 14.17%
+Avg search time (proved)  : 5.7432s
+Elapsed time              : 29406.06s
+Expansions used (proved)  : avg=5.0, max=30  (out of a budget of 32)
+Avg candidates examined   : 123.2 (over 854 theorems with any candidates)
+Avg proof length (steps)  : 4.7
+Theorems written to file  : 121 (fully closed proofs only -- C:\Users\eh\projects\Honours\COS700\results\residual\modular\NEq3-batched\longest_theorems_proved.txt)
+
+{
+  "avg_candidates_examined": 123.2,
+  "avg_expansions_used": 5.0,
+  "avg_proof_steps": 4.7,
+  "avg_search_time_s": 5.7432,
+  "elapsed_time_s": 29406.06,
+  "max_expansions_used": 30,
+  "model": "learned_model",
+  "proved": 121,
+  "theorem_success_rate_%": 14.17,
+  "theorems_written_to_file": 121,
+  "total_theorems": 854
+}
