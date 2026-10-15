@@ -1,12 +1,5 @@
 #!/usr/bin/env python
-"""Train residual models. Use --mode to pick the pipeline:
-
-  baseline     single model on the residual target (default)
-  modular-thm  theorem classifier only
-  modular-sub  substitution generator only
-
-All other arguments are forwarded to the chosen training script.
-"""
+"""Train residual models, forwarding all other arguments to the training script selected by --mode."""
 
 import argparse
 import sys

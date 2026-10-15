@@ -42,7 +42,7 @@ def parse_proofstep(step_str: str) -> Optional[dict]:
         s = s.strip()
         label_toks = s.split()
         if len(label_toks) != 1:
-            return None  # exactly one token should remain: the label
+            return None
         return {"theorem": label_toks[0], "subst": subst}
     except Exception:
         return None

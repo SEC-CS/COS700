@@ -1,34 +1,7 @@
 #!/usr/bin/env python
 """
-premise_search.py
-==================
-A lighter-weight companion to proof_search.py that measures premise
-selection in isolation: for each theorem in a split, whether the exact
-correct next step, built straight from that record's own "theorem"
-and "substitution", shows up anywhere among the model's sampled
-candidates for the root goal. Not whether a full proof gets found.
-
-Why this exists: proof_search.py's success rate conflates two very
-different skills -- picking the right premise/theorem for a goal, and
-correctly chaining many such choices together across subgoals (search
-exploration, sampling variance compounding across expansions, dead
-ends, etc). When the full search is doing badly, it's hard to tell
-which of those is actually the weak link, or whether a change to the
-data or model even moved the needle on either one. This script isolates
-the first skill: exactly one generate_steps() call per goal -- the same
-first-expansion call proof_search() would make on the root goal -- and
-an exact string match against the known-correct step. No subgoals, no
-recursive search, no expansion budget, no verifier round-trips: one
-call, one comparison, per theorem. Re-run this after each data/model/
-decoding change as a cheaper, more specific signal than the end-to-end
-proof-search success rate.
-
-Usage
------
-
-    Example: Sample 48 candidates per goal, write hits to found_premises.txt, and print a running summary:
-    python premise_search.py --mm data/set.mm --eval data/valid.jsonl --model-module model.py --tactics 48 --verbose      
-
+Measure premise selection in isolation: check whether the known-correct first step appears among the
+model's sampled candidates for each root goal, without running full proof search.
 """
 
 import argparse
@@ -60,7 +33,7 @@ def load_split(split_file: str) -> list[dict]:
                 )
             if label not in theorems:
                 order.append(label)
-            theorems[label] = record  # last occurrence wins
+            theorems[label] = record
     return [theorems[label] for label in order]
 
 
@@ -178,12 +151,7 @@ def main():
     parser.add_argument('--verbose',      action='store_true')
     args = parser.parse_args()
 
-    # mmverify/set.mm aren't actually used for the exact-match check
-    # itself -- only load_model_from_module()'s signature needs an `mm`
-    # object to hand to Model.set_mm() for any model implementation
-    # that wants it (this repo's model.py doesn't, but the loader
-    # convention is shared with proof_search.py, so this stays
-    # consistent rather than silently skipping it for some models).
+    # Only needed to satisfy the load_model_from_module() interface shared with proof_search.py.
     mmverify_path = args.mmverify
     print(f"Loading mmverify from {mmverify_path} ...")
     mmv = load_mmverify(mmverify_path)

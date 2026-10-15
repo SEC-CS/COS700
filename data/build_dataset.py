@@ -47,9 +47,6 @@ def training_example(record):
     )
 
 
-# ------------------------------------------------------------
-# Load dataset
-# ------------------------------------------------------------
 def load_dataset(filepath: str | Path, verbose=False) -> defaultdict:
     theorems = defaultdict(list)
 
@@ -57,8 +54,6 @@ def load_dataset(filepath: str | Path, verbose=False) -> defaultdict:
 
         for line in f:
             record = json.loads(line)
-            # Every proof step belongs to the theorem currently
-            # being proved.
             theorems[record["proof_label"]].append(record)
 
     all_theorems = list(theorems)
@@ -71,9 +66,6 @@ def load_dataset(filepath: str | Path, verbose=False) -> defaultdict:
     return theorems
 
 
-# ------------------------------------------------------------
-# Build theorem split
-# ------------------------------------------------------------
 def build_theorem_split(
     theorems: list, percent_valid: int, percent_test: int, verbose=False
 ) -> dict[str, list]:
@@ -105,9 +97,6 @@ def build_theorem_split(
     }
 
 
-# ------------------------------------------------------------
-# Write datasets
-# ------------------------------------------------------------
 def output_to_file(
     splits: dict[str, list], theorems: defaultdict, output_dir: str | Path, verbose=False
 ):

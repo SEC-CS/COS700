@@ -1,75 +1,7 @@
 #!/usr/bin/env python
 """
-train_substitution_model.py
-============================
-Fine-tunes a pre-trained causal language model to predict a theorem's
-SUBSTITUTION, given the GOAL and that theorem's own structural
-definition (its mandatory variables, essential hypotheses, and
-conclusion) -- NOT the theorem's name/label.
-
-Why the theorem's structure instead of its name
--------------------------------------------------
-Feeding the model a bare label like "xor2" forces it to memorize, per
-theorem name, what variables that theorem has and what shape its
-conclusion takes -- that knowledge doesn't transfer to a theorem it
-saw rarely or never during training.
-
-Feeding it the theorem's actual mandatory variables, hypotheses, and
-conclusion instead gives the model the same information a human proving
-the goal by hand would use: the conclusion's shape can be pattern-matched
-against the goal's own shape to work out most variable values (since the
-conclusion, once correctly substituted, must equal the goal), and the
-mandatory variable list tells the model exactly which variables it needs
-to produce values for in the first place.
-
-Where this structural info comes from
----------------------------------------
-The JSONL only stores each record's theorem NAME. To turn that into its
-actual definition, this script loads the real .mm database (the same way
-proof_search.py does, via mmverify.py) and looks the label up in
-mm.labels: `(distinct, mand_var, hyp, result) = mm.labels[theorem][1]`.
-The theorem name itself is discarded after this lookup -- it never
-appears in the model's input.
-
-`distinct` ($d disjointness constraints) is deliberately left out of the
-prompt: it's a validity check the verifier applies AFTER a substitution
-is proposed, not information that helps produce the substitution's
-token values in the first place.
-
-ASSUMPTION TO VERIFY: this assumes mand_var entries are
-(typecode, varname) tuples, matching how proof_search.py destructures
-them (`for _, v in mand_var`). If your mmverify.py stores them the other
-way round, swap the unpacking in format_theorem_info() below.
-
-Expected input format
-----------------------
---train / --valid point to JSONL files, one record per proof step:
-
-    {"proof_label":  "xornan",
-     "goal":         "[[ ]] |- ( ( ph \\/_ ps ) <-> ( ( ph \\/ ps ) /\\ -. ( ph /\\ ps ) ) )",
-     "theorem":      "xor2",
-     "substitution": {"ph": ["ph"], "ps": ["ps"]}}
-
-"goal" goes into the prompt as-is. "theorem" is used only to look up
-that theorem's definition in the .mm database (see above) -- it is not
-itself part of the model's input. "substitution" is turned into the
-generation TARGET by format_substitution() below.
-
-IMPORTANT: format_substitution()/parse_substitution() below are a
-reasonable default ("{{ var : val }} {{ var : val }} ..."), but they are
-NOT guaranteed to match your existing proof_search.py parsing logic. If
-proof_search.py already has a substitution parser, keep these two
-functions in sync with it (or better, import the real one) -- otherwise
-this model will learn to produce a format nothing downstream can read.
-
-Output
-------
-A single directory containing the fine-tuned model's weights, config,
-and tokenizer -- loadable with a plain AutoModelForCausalLM.from_pretrained()
-call. If --use-lora is on (the default), LoRA adapters are trained for
-efficiency and merged back into the base model before saving, so the
-*saved* artifact is a normal, adapter-free model.
-
+Fine-tune a causal language model to predict a theorem's substitution from the goal and the theorem's
+structure (mandatory variables, hypotheses and conclusion) looked up in the .mm database.
 """
 
 import argparse
@@ -93,11 +25,6 @@ PROMPT_TEMPLATE = (
     "RESULT: {result}\n"
     "SUBSTITUTION:"
 )
-
-
-# ---------------------------------------------------------------------------
-# .mm database loading and theorem-info lookup
-# ---------------------------------------------------------------------------
 
 
 def load_mmverify(path: str):
@@ -162,11 +89,6 @@ def build_theorem_info_cache(mm, labels_needed: set) -> dict:
     return cache
 
 
-# ---------------------------------------------------------------------------
-# Substitution <-> text formatting
-# ---------------------------------------------------------------------------
-
-
 def format_substitution(substitution: dict) -> str:
     """
     Turns {"ph": ["ph"], "ps": ["ps", "ch"]} into the generation target
@@ -206,11 +128,6 @@ def parse_substitution(text: str) -> dict:
         var, value_str = body.split(":", 1)
         substitution[var.strip()] = value_str.strip().split()
     return substitution
-
-
-# ---------------------------------------------------------------------------
-# Dataset
-# ---------------------------------------------------------------------------
 
 
 class SubstitutionDataset(Dataset):
@@ -254,9 +171,6 @@ class SubstitutionDataset(Dataset):
                 except KeyError as e:
                     raise KeyError(f"{jsonl_path}:{line_no} is missing field {e}") from e
 
-                # A theorem missing from the .mm database (or not a
-                # $a/$p statement) has no structural info to build a
-                # prompt from, so this example can't be used.
                 if theorem not in theorem_info_cache:
                     skipped_unknown_theorem += 1
                     continue
@@ -332,11 +246,6 @@ class PadCollator:
             "attention_mask": torch.tensor(attention_mask, dtype=torch.long),
             "labels": torch.tensor(labels, dtype=torch.long),
         }
-
-
-# ---------------------------------------------------------------------------
-# Main
-# ---------------------------------------------------------------------------
 
 
 def collect_theorem_labels(*jsonl_paths: str) -> set:
@@ -467,8 +376,6 @@ def main(
     if args.grad_ckpt is None:
         args.grad_ckpt = not args.use_lora
 
-    # --- Detect what hardware is actually available and pick a matching
-    # --- precision, instead of assuming bf16 + GPU are there. -----------
     has_cuda = torch.cuda.is_available()
     use_bf16 = has_cuda and torch.cuda.is_bf16_supported()
     use_fp16 = has_cuda and not use_bf16
@@ -499,10 +406,6 @@ def main(
         print("--load-in-4bit requires a CUDA GPU; ignoring it on CPU.")
         args.load_in_4bit = False
 
-    # --- Load the .mm database once and look up every theorem this run
-    # --- will need, so each JSONL example's prompt can be built from
-    # --- that theorem's actual mandatory variables/hypotheses/result
-    # --- instead of its bare name. --------------------------------------
     print(f"Loading .mm database from {args.mm} ...")
     mm = load_mm_database(args.mm, args.mmverify)
     labels_needed = collect_theorem_labels(args.train, args.valid)

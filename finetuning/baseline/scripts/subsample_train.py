@@ -1,21 +1,7 @@
 #!/usr/bin/env python
 """
-subsample_train.py
-===================
-Produces a representative subset of train.jsonl by sampling a fraction
-of its theorems spread evenly across set.mm's complexity ordering --
-the same bucketing idea split_dataset uses for validation/test --
-instead of truncating to the first N lines (which --max-train-samples
-in train_model.py does, and which skews toward the simplest, earliest
-theorems in the file).
-
-Use this when you want a bounded, faster-to-train dataset that still
-represents the full range of theorem difficulty, e.g. for an interim
-evaluation run before committing to the full dataset.
-
-Usage:
-    python finetuning/scripts/subsample_train.py --input finetuning/data/train.jsonl \
-        --output finetuning/data/train_subset.jsonl --fraction 0.15
+Build a smaller training set by sampling a fraction of theorems spread evenly across set.mm's
+complexity ordering, rather than truncating to the first N lines.
 """
 
 import argparse
@@ -31,8 +17,6 @@ def main():
                               "for roughly 15%%")
     args = parser.parse_args()
 
-    # Pass 1: theorem labels in order of first appearance (= complexity
-    # order, same reasoning as split_dataset.py).
     label_order = []
     seen = set()
     with open(args.input) as f:
@@ -54,13 +38,12 @@ def main():
         start, end = bucket_edges[b], bucket_edges[b + 1]
         if start >= end:
             continue
-        mid = (start + end - 1) // 2  # deterministic pick: bucket midpoint
+        mid = (start + end - 1) // 2
         kept.add(label_order[mid])
 
     print(f"Theorems in input : {n_theorems}")
     print(f"Theorems kept     : {len(kept)} ({len(kept) / n_theorems:.1%})")
 
-    # Pass 2: stream through, keeping only steps from kept theorems.
     n_steps = 0
     with open(args.input) as f_in, open(args.output, "w") as f_out:
         for line in f_in:

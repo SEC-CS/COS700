@@ -1,59 +1,7 @@
 #!/usr/bin/env python
 """
-train_model_thm.py
-===============
-Fine-tunes a pre-trained model to CLASSIFY a Metamath proof GOAL into one
-of a fixed set of THEOREM labels.
-
-Training objective: sequence classification. Given a GOAL string, predict
-which theorem/axiom (proof_label) applies. This is a single forward pass
-per example -- the model outputs one score per known theorem, not text.
-
-IMPORTANT -- what changed vs. the generation-based version, and why:
-
-  * No token generation. AutoModelForSequenceClassification replaces
-    AutoModelForCausalLM. The model's output is a fixed-size vector of
-    scores (logits), one per theorem in our label vocabulary, not a
-    sequence of vocabulary tokens.
-
-  * The SUBSTITUTION field is no longer used. A classifier can only
-    choose among a fixed, closed set of labels -- it cannot produce the
-    free-form variable/value pairs that `format_proofstep()` used to
-    encode into the generation target. If your downstream proof search
-    needs substitutions, this classifier only gives you the theorem
-    name; something else has to fill in the substitution.
-
-  * The model only ever sees the GOAL as input. There is no
-    prompt+target concatenation and no -100 loss masking, because
-    there's nothing to mask: the label is a single integer, not a
-    sequence of target tokens.
-
-Expected input format
-----------------------
---train / --valid point to JSONL files, one record per proof step:
-
-    {"proof_label":  "xornan",
-     "goal":         "[[ ]] |- ( ( ph \\/_ ps ) <-> ( ( ph \\/ ps ) /\\ -. ( ph /\\ ps ) ) )",
-     "theorem":      "xor2",
-     "substitution": {"ph": ["ph"], "ps": ["ps"]}}
-
-Only "goal" and "theorem" are used here. "theorem" becomes the
-classification label; "proof_label" and "substitution" are ignored.
-
-The label vocabulary (the full set of possible theorem names) is built
-once from --train (see build_label_vocab below) and saved next to the
-model as label_map.json, so anything loading this model later knows how
-to map a predicted class index back to a theorem name.
-
-Output
-------
-A single directory containing the fine-tuned model's weights, config,
-tokenizer, and label_map.json -- loadable with a plain
-AutoModelForSequenceClassification.from_pretrained() call. If --use-lora
-is on (the default), LoRA adapters are trained for efficiency and merged
-back into the base model before saving, so the *saved* artifact is a
-normal, adapter-free model.
-
+Fine-tune a sequence classifier that predicts which theorem label applies to a proof goal.
+The label vocabulary is built from --train and saved alongside the model as label_map.json.
 """
 
 import argparse
@@ -70,11 +18,6 @@ from transformers import (
     Trainer,
     TrainingArguments,
 )
-
-
-# ---------------------------------------------------------------------------
-# Label vocabulary
-# ---------------------------------------------------------------------------
 
 
 def build_label_vocab(jsonl_path: str) -> dict:
@@ -97,11 +40,6 @@ def build_label_vocab(jsonl_path: str) -> dict:
             record = json.loads(line)
             labels.add(record["theorem"])
     return {label: idx for idx, label in enumerate(sorted(labels))}
-
-
-# ---------------------------------------------------------------------------
-# Dataset
-# ---------------------------------------------------------------------------
 
 
 class ProofLabelDataset(Dataset):
@@ -136,10 +74,6 @@ class ProofLabelDataset(Dataset):
                 except KeyError as e:
                     raise KeyError(f"{jsonl_path}:{line_no} is missing field {e}") from e
 
-                # A label that never appeared in --train has no class
-                # index to be assigned to, so the model has no way to
-                # ever predict it correctly -- skip rather than crash,
-                # but tell the user how many were dropped.
                 if theorem not in label2id:
                     skipped_unseen_label += 1
                     continue
@@ -170,11 +104,6 @@ class ProofLabelDataset(Dataset):
         return encoded
 
 
-# ---------------------------------------------------------------------------
-# Metrics
-# ---------------------------------------------------------------------------
-
-
 def compute_metrics(eval_pred):
     """Plain top-1 accuracy: fraction of examples where the highest-scoring
     class matches the true theorem label."""
@@ -182,11 +111,6 @@ def compute_metrics(eval_pred):
     predictions = np.argmax(logits, axis=-1)
     accuracy = (predictions == labels).mean()
     return {"accuracy": accuracy}
-
-
-# ---------------------------------------------------------------------------
-# Main
-# ---------------------------------------------------------------------------
 
 
 def main(
@@ -299,8 +223,6 @@ def main(
     if args.grad_ckpt is None:
         args.grad_ckpt = not args.use_lora
 
-    # --- Detect what hardware is actually available and pick a matching
-    # --- precision, instead of assuming bf16 + GPU are there. -----------
     has_cuda = torch.cuda.is_available()
     use_bf16 = has_cuda and torch.cuda.is_bf16_supported()
     use_fp16 = has_cuda and not use_bf16
@@ -310,9 +232,6 @@ def main(
         precision = "bf16" if use_bf16 else "fp16"
         print(f"GPU detected: {gpu_name} -- training in {precision}.")
         compute_dtype = torch.bfloat16 if use_bf16 else torch.float16
-        # Free speed on Ampere+ (RTX 30/40-series and newer): lets matmuls
-        # use TF32 internally without affecting the bf16/fp16 training
-        # precision set above.
         torch.backends.cuda.matmul.allow_tf32 = True
         torch.backends.cudnn.allow_tf32 = True
     else:
@@ -334,8 +253,6 @@ def main(
         print("--load-in-4bit requires a CUDA GPU; ignoring it on CPU.")
         args.load_in_4bit = False
 
-    # --- Label vocabulary: fixed set of theorem names the model can
-    # --- choose among. Built once from --train (see build_label_vocab). -
     label2id = build_label_vocab(args.train)
     id2label = {idx: label for label, idx in label2id.items()}
     print(f"Label vocabulary: {len(label2id)} distinct theorem labels")
@@ -343,11 +260,7 @@ def main(
     tokenizer = AutoTokenizer.from_pretrained(args.base_model)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
-    # Causal decoder models have no [CLS] token to pool from, so
-    # AutoModelForSequenceClassification instead reads the LAST
-    # non-padded token's hidden state as the sequence representation.
-    # That only lands on the same position across a batch if shorter
-    # sequences are padded on the LEFT.
+    # Sequence classification pools the last non-pad token, so pad on the left.
     tokenizer.padding_side = "left"
 
     model_kwargs = dict(dtype=compute_dtype)
@@ -393,11 +306,7 @@ def main(
                 "up_proj",
                 "down_proj",
             ],
-            # The classification head ("score") is randomly initialized
-            # and untrained. LoRA freezes everything except its own
-            # adapter matrices by default, so without explicitly telling
-            # PEFT to also train this head, it would never update and
-            # the model would stay a random, useless classifier.
+            # The classification head is newly initialised, so LoRA must train it too.
             modules_to_save=["score"],
         )
         model = get_peft_model(model, lora_config)
@@ -419,10 +328,6 @@ def main(
         args.max_length,
         max_examples=args.max_valid_samples,
     )
-    # No custom padding logic needed: with a single integer label per
-    # example (instead of a padded, -100-masked label sequence), the
-    # built-in collator can pad input_ids/attention_mask and pass
-    # "labels" straight through.
     collator = DataCollatorWithPadding(tokenizer)
 
     print(f"Train examples: {len(train_dataset)}")
@@ -464,9 +369,6 @@ def main(
 
     trainer.train()
 
-    # Merge LoRA adapters (if used) so the saved artifact is a plain model
-    # directory -- weights + config + tokenizer, loadable with a single
-    # AutoModelForSequenceClassification.from_pretrained() call.
     if args.use_lora:
         model = model.merge_and_unload()
 
@@ -474,9 +376,6 @@ def main(
     model.save_pretrained(final_dir)
     tokenizer.save_pretrained(final_dir)
 
-    # id2label/label2id are already saved inside config.json by
-    # save_pretrained above, but a standalone label_map.json makes the
-    # mapping easy to find without loading the whole model config.
     with open(os.path.join(final_dir, "label_map.json"), "w") as f:
         json.dump({"label2id": label2id, "id2label": id2label}, f, indent=2)
 

@@ -108,7 +108,7 @@ class Model:
         ).to(self.device)
         self.substitution_model.eval()
 
-        self.mm = None  # set via set_mm(); needed for the substitution prompt
+        self.mm = None
         self._theorem_info_cache = {}
         self.empty_substitution_labels = set()
 
@@ -118,10 +118,6 @@ class Model:
 
     def set_empty_substitution_labels(self, labels: set[str]) -> None:
         self.empty_substitution_labels = set(labels)
-
-    # -----------------------------------------------------------------
-    # Theorem structural info (from the .mm database)
-    # -----------------------------------------------------------------
 
     def _theorem_info(self, theorem: str) -> dict | None:
         """Returns the mandvars/hyp/result text fields for a theorem, in
@@ -144,10 +140,6 @@ class Model:
         self._theorem_info_cache[theorem] = info
         return info
 
-    # -----------------------------------------------------------------
-    # Step 1: theorem candidates
-    # -----------------------------------------------------------------
-
     def _top_theorem_candidates(self, goal_str: str, k: int) -> list[tuple[str, float]]:
         """Returns up to k (theorem_label, logprob) pairs, most likely first."""
         inputs = self.theorem_tokenizer(
@@ -168,10 +160,6 @@ class Model:
             (self.id2label[idx.item()], logprob.item())
             for logprob, idx in zip(top_log_probs, top_indices)
         ]
-
-    # -----------------------------------------------------------------
-    # Step 2: substitution candidates for one theorem
-    # -----------------------------------------------------------------
 
     def _sample_substitutions(
         self,
@@ -244,7 +232,6 @@ class Model:
                 theorem, theorem_logprob = theorem_batch[prompt_index]
                 generated_ids = sequence[prompt_len:]
 
-                # Ignore padding after a sequence's first EOS token.
                 eos_positions = (generated_ids == eos_id).nonzero()
                 length = (
                     eos_positions[0].item()
@@ -260,10 +247,6 @@ class Model:
 
         return results
 
-    # -----------------------------------------------------------------
-    # Public interface expected by proof_search.py
-    # -----------------------------------------------------------------
-
     def generate_steps(
         self, goal_str: str, n: int = 32, temperature: float = 1.0
     ) -> list[tuple[str, float]]:
@@ -276,11 +259,6 @@ class Model:
         if not theorem_candidates:
             return []
 
-        # Spread the n requested candidates evenly across the theorems
-        # we're trying; some theorems may return fewer usable
-        # candidates than requested (e.g. malformed generations get
-        # dropped below), which is fine -- proof_search.py just works
-        # with however many valid candidates come back.
         per_theorem = max(1, -(-n // len(theorem_candidates)))  # ceil division
         candidates = []
         for theorem, substitution_text, combined_logprob in self._sample_substitutions(
@@ -288,14 +266,10 @@ class Model:
         ):
             substitution = parse_substitution(substitution_text)
             if not substitution and not getattr(self, "allow_empty_substitution", False):
-                # Malformed generation (or None substitution) -- skip rather
-                # than return a step that could never verify.
                 continue
             step_str = f"{theorem} {substitution_text}"
             candidates.append((step_str, combined_logprob))
 
-        # Keep the highest-probability occurrence of each exact proof step:
-        # repeated samples otherwise trigger redundant verifier work.
         best_by_step = {}
         for step_str, logprob in candidates:
             if step_str not in best_by_step or logprob > best_by_step[step_str]:

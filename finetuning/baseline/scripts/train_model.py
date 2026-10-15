@@ -15,11 +15,6 @@ from utils.formatting import format_proofstep
 PROMPT_TEMPLATE = "GOAL: {goal}\nPROOFSTEP:"
 
 
-# ---------------------------------------------------------------------------
-# Dataset
-# ---------------------------------------------------------------------------
-
-
 class ProofStepDataset(Dataset):
     """
     Reads a JSONL file of {goal, theorem, substitution} records and tokenizes
@@ -76,7 +71,6 @@ class ProofStepDataset(Dataset):
 
         prompt_ids = self.tokenizer(prompt, add_special_tokens=False)["input_ids"]
         target_ids = self.tokenizer(target, add_special_tokens=False)["input_ids"]
-        # Keep every target token in the loss.
         prompt_budget = max(0, self.max_length - len(target_ids))
         prompt_ids = prompt_ids[-prompt_budget:] if prompt_budget else []
         target_ids = target_ids[: self.max_length]
@@ -113,11 +107,6 @@ class PadCollator:
             "attention_mask": torch.tensor(attention_mask, dtype=torch.long),
             "labels": torch.tensor(labels, dtype=torch.long),
         }
-
-
-# ---------------------------------------------------------------------------
-# Main
-# ---------------------------------------------------------------------------
 
 
 def main(
@@ -241,7 +230,6 @@ def main(
     compute_dtype = torch.float32
 
     if torch.cuda.is_available():
-        # bf16 where the card supports it, fp16 otherwise.
         use_bf16 = torch.cuda.is_bf16_supported()
         use_fp16 = not use_bf16
         compute_dtype = torch.bfloat16 if use_bf16 else torch.float16
@@ -249,8 +237,6 @@ def main(
             f"GPU: {torch.cuda.get_device_name(0)} -- training in "
             f"{'bf16' if use_bf16 else 'fp16'}."
         )
-        # Free speed on Ampere+ (RTX 30/40-series and newer): lets matmuls use
-        # TF32 internally without affecting the bf16/fp16 precision set above.
         torch.backends.cuda.matmul.allow_tf32 = True
         torch.backends.cudnn.allow_tf32 = True
     else:
@@ -349,9 +335,6 @@ def main(
 
     trainer.train()
 
-    # Merge LoRA adapters (if used) so the saved artifact is a plain model
-    # directory -- weights + config + tokenizer, loadable with a single
-    # AutoModelForCausalLM.from_pretrained() call, per the methodology.
     if args.use_lora:
         model = model.merge_and_unload()
 

@@ -1,20 +1,6 @@
 """
-Implements the Model interface proof_search.py and premis_search.py expects.
-
-Format required by proof_search.py:
-Input:
-              goal_str — goal in the format:
-                "[[ |- hyp1   |- hyp2 ]] |- conclusion"
-
-            Output:
-              List of (proofstep_string, log_probability) tuples,
-              deduplicated, sorted by log_probability descending.
-
-              proofstep_string format:
-                "theorem_label {{ var1 : val1 }} {{ var2 : val2 }} ..."
-
-              log_probability: float, more negative = less confident.
-            \"""
+Baseline model implementing the interface used by proof_search.py and premise_search.py.
+Returns deduplicated (proofstep, log_probability) pairs, most likely first.
 """
 
 import os
@@ -71,7 +57,6 @@ class Model:
         prompt_len = inputs["input_ids"].shape[1]
         eos_id = self.tokenizer.eos_token_id
 
-        # text -> best log-probability seen for that exact string
         candidates: dict[str, float] = {}
 
         batch_size = self._gen_batch_size or n
@@ -99,7 +84,6 @@ class Model:
                 transition_scores = self.model.compute_transition_scores(
                     outputs.sequences, outputs.scores, normalize_logits=True
                 )
-                # Decrease batch if OOM
             except torch.cuda.OutOfMemoryError:
                 torch.cuda.empty_cache()
                 if batch_size == 1:

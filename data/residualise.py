@@ -1,20 +1,7 @@
 #!/usr/bin/env python3
 """
-Convert proof-step JSONL splits into "label + residual" training targets.
-
-Usage
------
-Run from the repository root.
-    # one split
-    python -m residuals.data.residualise \\
-        --split data/01_CLASSICAL_FIRST-ORDER_LOGIC_WITH_EQUALITY/train.jsonl
-    # a whole section, writing <split>.residual.jsonl next to each input
-    python -m residuals.data.residualise --split .\baseline\data\datasets\longest_theorems\train.jsonl .\baseline\data\datasets\longest_theorems\valid.jsonl .\baseline\data\datasets\longest_theorems\test.jsonl --out-dir residuals/data/longest_theorems
-
-Note: 
-
-The first run parses set.mm (~100s) and caches the label table; later runs
-load the cache. Pass --rebuild after set.mm changes.
+Convert proof-step JSONL splits into label + residual training targets.
+The parsed set.mm label table is cached; pass --rebuild after set.mm changes.
 """
 
 import argparse
@@ -37,11 +24,6 @@ from utils.matcher import (
 CLASSES = ("strip", "ranked", "full")
 
 
-# ---------------------------------------------------------------------------
-# The transform
-# ---------------------------------------------------------------------------
-
-
 def residualise(record: dict, table: dict, cap: int = DEFAULT_CAP) -> tuple:
     """
     -> (target, klass, rank)
@@ -54,7 +36,6 @@ def residualise(record: dict, table: dict, cap: int = DEFAULT_CAP) -> tuple:
     subst = record["substitution"]
     rvars = info["rvars"]
 
-    # What the matcher is responsible for recovering, per the ground truth.
     # Older extracted datasets can omit mandatory variables that the current
     # database exposes in the assertion.
     truth = determined_key(
@@ -70,7 +51,6 @@ def residualise(record: dict, table: dict, cap: int = DEFAULT_CAP) -> tuple:
             solutions.append(key)
 
     if truth not in solutions:
-        # Unrecoverable, should not happen on clean data.
         step = format_proofstep(record["theorem"], subst)
         return step, "full", 0
 
@@ -134,11 +114,6 @@ def convert(
     return rows, counts
 
 
-# ---------------------------------------------------------------------------
-# Reporting
-# ---------------------------------------------------------------------------
-
-
 def report(split_path, rows, counts, samples: int = 2) -> None:
     n = len(rows)
     if not n:
@@ -192,11 +167,6 @@ def report(split_path, rows, counts, samples: int = 2) -> None:
 
 def _clip(s: str, width: int = 96) -> str:
     return s if len(s) <= width else s[: width - 1] + "…"
-
-
-# ---------------------------------------------------------------------------
-# CLI
-# ---------------------------------------------------------------------------
 
 
 def main() -> None:

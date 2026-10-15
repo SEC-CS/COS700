@@ -1,14 +1,5 @@
 #!/usr/bin/env python
-"""
-Reports the token-length distribution of (GOAL + PROOFSTEP) sequences in
-a JSONL file, so --max-length in train_model.py can be set from your
-actual data.
-
-Usage (from the repository root):
-    python -m baseline.finetuning.scripts.check_lengths \
-        --input data/01_CLASSICAL_FIRST-ORDER_LOGIC_WITH_EQUALITY/train.jsonl \
-        --base-model Qwen/Qwen2.5-Coder-0.5B
-"""
+"""Report the token-length distribution of GOAL + PROOFSTEP sequences in a JSONL file, to help choose --max-length for training."""
 
 import argparse
 import json
@@ -38,8 +29,6 @@ def main():
 
     tokenizer = AutoTokenizer.from_pretrained(args.base_model)
 
-    # Reservoir sampling: one pass, fixed memory, uniform sample even
-    # though we don't know the file's total line count up front.
     sample = []
     with open(args.input) as f:
         i = 0

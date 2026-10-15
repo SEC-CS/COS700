@@ -1,26 +1,5 @@
 #!/usr/bin/env python3
-"""
-Extract supervised training examples from a Metamath database.
-
-Each training example consists of
-
-    GOAL
-        [[ essential hypotheses ]] conclusion
-
-    TARGET
-        theorem_label {{ variable : substitution }} ...
-
-The theorem label is the theorem applied at that proof step.
-The substitution maps the theorem's mandatory variables to the
-expressions used in that application.
-
-The verifier can reconstruct the resulting subgoals directly from
-(label, substitution), so they are not stored in the dataset.
-
-  uv run python extractor.py --mm set.mm --output proof_steps.jsonl
-  uv run python extractor.py --mm set.mm --output proof_steps.jsonl --training training.txt
-  uv run python extractor.py --mm set.mm --output proof_steps.jsonl --limit 100 --verbose
-"""
+"""Extract supervised training examples (goal -> theorem label + substitution) from every proof step in a Metamath database."""
 
 import argparse
 import importlib.util
@@ -31,9 +10,6 @@ import sys
 import pandas as pd
 
 
-# ------------------------------------------------------------
-# Load mmverify
-# ------------------------------------------------------------
 def load_mmverify(path: str):
     spec = importlib.util.spec_from_file_location("mmverify", path)
     mod = importlib.util.module_from_spec(spec)
@@ -41,9 +17,6 @@ def load_mmverify(path: str):
     return mod
 
 
-# ------------------------------------------------------------
-# Formatting helpers
-# ------------------------------------------------------------
 def tokens_to_str(tokens):
     return " ".join(tokens)
 
@@ -81,9 +54,6 @@ def write_training_example(train_file, goal, label, subst):
     train_file.write(f"GOAL {goal} " f"PROOFSTEP {target}" "<|endoftext|>\n")
 
 
-# ------------------------------------------------------------
-# Recording MM
-# ------------------------------------------------------------
 def make_recording_mm(mmv):
     class RecordingMM(mmv.MM):
         """
@@ -121,7 +91,6 @@ def make_recording_mm(mmv):
                     if sp < 0:
                         raise mmv.MMError(f"stack underflow in {stat_label}")
 
-                    # Build substitution
                     subst = {}
                     sp2 = sp
 
@@ -133,7 +102,6 @@ def make_recording_mm(mmv):
                         subst[var] = entry[1:]
                         sp2 += 1
 
-                    # Distinct variable conditions
                     for x, y in distinct:
                         x_vars = self.find_vars(subst[x])
                         y_vars = self.find_vars(subst[y])
@@ -143,7 +111,6 @@ def make_recording_mm(mmv):
                             if not self.fs.lookup_d(xv, yv):
                                 raise mmv.MMError(f"disjoint violation {xv}, {yv}")
 
-                    # Verify essential hypotheses
                     for h in hyp:
                         entry = stack[sp2]
                         expected = self.apply_subst(h, subst)
@@ -151,16 +118,13 @@ def make_recording_mm(mmv):
                             raise mmv.MMError("essential hypothesis mismatch")
                         sp2 += 1
 
-                    # Compute instantiated conclusion
                     conclusion = self.apply_subst(result, subst)
 
-                    # Ignore syntax/type derivations
                     if not conclusion or conclusion[0] != "|-":
                         del stack[len(stack) - npop :]
                         stack.append(conclusion)
                         continue
 
-                    # Record training example
                     goal = format_goal(theorem_e_hyps, conclusion)
 
                     record = {
@@ -179,14 +143,12 @@ def make_recording_mm(mmv):
 
                     self.step_count += 1
 
-                    # Update stack
                     del stack[len(stack) - npop :]
                     stack.append(conclusion)
 
                 elif step_type in ("$e", "$f"):
                     stack.append(step_data)
 
-            # Final verification
             if len(stack) != 1:
                 raise mmv.MMError(f"stack has {len(stack)} entries")
 
@@ -196,9 +158,6 @@ def make_recording_mm(mmv):
     return RecordingMM
 
 
-# ------------------------------------------------------------
-# Core extraction function
-# ------------------------------------------------------------
 def extract_proof_steps(
     mm_path, mmverify_path=None, verbose=False, jsonl_output=None, training_output=None
 ) -> pd.DataFrame:
@@ -215,7 +174,6 @@ def extract_proof_steps(
     Returns:
         pandas.DataFrame with columns: proof_label, goal, theorem, substitution
     """
-    # Locate mmverify.py
     if mmverify_path is None:
         mmverify_path = os.path.join(
             os.path.dirname(__file__),
@@ -226,7 +184,6 @@ def extract_proof_steps(
         print(f"Could not find {mmverify_path}")
         sys.exit(1)
 
-    # Load mmverify
     if verbose:
         print(f"Loading {mmverify_path}")
     mmv = load_mmverify(mmverify_path)
@@ -277,9 +234,6 @@ def extract_proof_steps(
     return df
 
 
-# ------------------------------------------------------------
-# CLI Main
-# ------------------------------------------------------------
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Extract supervised Metamath training data."

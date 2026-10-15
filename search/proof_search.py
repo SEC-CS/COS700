@@ -1,36 +1,6 @@
-r"""
-proof_search.py
-===============
-
-See help with `python proof_search.py --help` for usage.
-
-Usage example:
-# Run proof search with 1 attempt and 32 tactics. Output written to longest_theorems_proved.txt and longest_expansions.csv.
-Run both:
-
-$env:PROVER_MODEL_DIR = ".\baseline\finetuning\output\longest_theorems\final"
-uv run python -m baseline.search.proof_search --mm baseline/data/set.mm --eval baseline/data/datasets/longest_theorems/test.jsonl --model-module baseline/search/model.py --proved-output baseline/results/longest_theorems_proved.txt --expansions-output baseline/results/long_expansions.csv --attempts 1 --expansions 32
-
-Optional add to command writes console output to baseline/results/proof_search.log:
-2>&1 | Tee-Object baseline/results/proof_search.log 
-
-# Run proof search with 1 attempt and 64 expansions, writing proved theorems to proved_theorems.txt and expansion counts to expansions.csv:
-uv run python proof_search.py --mm data/set.mm --eval data/valid.jsonl --model-module model.py --proved-output proved_theorems.txt --expansions-output expansions.csv --attempts 1 --expansions 64
-   
-  
-(
-  uv run python -m baseline.search.proof_search
-    --mm baseline/data/set.mm
-    --mmverify baseline/data/mmverify.py
-    --eval baseline/data/small_datasets/longest_theorems/valid.jsonl
-    --model-module modular/search/model.py
-    --proved-output modular/results/proved_theorems.txt
-    --expansions-output modular/results/expansions.csv
-    --attempts 1
-    --expansions 64
-)
-   
-  
+"""
+Run verifier-checked proof search with a model over each theorem in an evaluation split,
+recording proved theorems and expansion counts.
 """
 
 import argparse
@@ -154,31 +124,14 @@ class MetamathVerifier:
 
             distinct, mand_var, hyp, result = data
 
-            # The predicted substitution must cover every mandatory
-            # variable of the theorem being applied (its $f-hypothesis
-            # variables). If the model omitted one, the step is
-            # incomplete and can't be checked/applied.
             for _, v in mand_var:
                 if v not in subst:
                     return None
 
-            # The applied theorem's own conclusion, under the predicted
-            # substitution, must equal the current goal's conclusion.
             substituted_result = self.mm.apply_subst(result, subst)
             if substituted_result != goal["conclusion"]:
                 return None
 
-            # Check distinct variable conditions.
-            # Some theorems only hold when certain variables are genuinely
-            # distinct — e.g. universal generalisation requires that the
-            # bound variable does not appear in the hypotheses.
-            # For each ($d x y) constraint declared in the theorem:
-            #   - find all variables inside subst(x) and subst(y)
-            #   - verify no variable appears in both, AND that any pair
-            #     of variables across the two sets are themselves declared
-            #     distinct in the current scope.
-            # If either check fails the substitution violates the constraint
-            # and the step is invalid.
             for x, y in distinct:
                 if x not in subst or y not in subst:
                     continue
@@ -188,8 +141,6 @@ class MetamathVerifier:
                     if xv == yv or not self.mm.fs.lookup_d(xv, yv):
                         return None
 
-            # Compute subgoals by applying the substitution to each
-            # essential hypothesis of the applied theorem
             new_subgoals = []
             for h in hyp:
                 subgoal_tokens = self.mm.apply_subst(h, subst)
@@ -621,7 +572,6 @@ def evaluate(
                         flush=True,
                     )
                 if proved_file is not None and clean_proof is not None:
-                    # write total number of expansions used for this theorem too
                     proved_file.write(
                         format_proved_theorem(
                             label, root_goal, clean_proof, total_expansions

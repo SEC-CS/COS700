@@ -1,9 +1,4 @@
-"""
-
-Recovers the part of a proof step's substitution that is determined by the
-goal, so the model never has to emit it.
-
-"""
+"""Recover the part of a proof step's substitution that is determined by the goal, so the model never has to emit it."""
 
 import pickle
 from pathlib import Path
@@ -21,11 +16,6 @@ DEFAULT_MM = "data/set.mm"
 
 DEFAULT_MMVERIFY = "data/mmverify.py"
 DEFAULT_CACHE = "data/residual/label_table.pkl"
-
-
-# ---------------------------------------------------------------------------
-# Per-label table, built once from set.mm
-# ---------------------------------------------------------------------------
 
 
 def label_table(
@@ -86,11 +76,6 @@ def label_table(
     return table
 
 
-# ---------------------------------------------------------------------------
-# The matcher
-# ---------------------------------------------------------------------------
-
-
 def complete(
     pattern: list,
     goal_conclusion: list,
@@ -119,12 +104,12 @@ def complete(
         token = pattern[pi]
         kind = kinds.get(token)
 
-        if kind is None:  # a constant: must match exactly
+        if kind is None:
             if ti < len(goal_conclusion) and goal_conclusion[ti] == token:
                 rec(pi + 1, ti + 1, subst)
             return
 
-        if token in subst:  # already bound: must match its binding
+        if token in subst:
             val = subst[token]
             if goal_conclusion[ti : ti + len(val)] == val:
                 rec(pi + 1, ti + len(val), subst)
@@ -143,7 +128,7 @@ def complete(
                 break
             span = goal_conclusion[ti : ti + width]
             if not balanced(span):
-                continue  # not an expression, so not a real substitution
+                continue
             subst[token] = span
             rec(pi + 1, ti + width, subst)
             del subst[token]
