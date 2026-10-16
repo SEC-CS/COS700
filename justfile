@@ -197,3 +197,11 @@ all:
   just data
   just finetune
   just proof_search
+
+official_runs:
+  just sync
+  just data
+  just finetune 42
+  just proof_search 1
+  just proof_search 2
+  just proof_search 3
