@@ -11,6 +11,7 @@ from transformers import (
     TrainingArguments,
 )
 from utils.formatting import format_proofstep
+from utils.training_stats import train_and_record_time
 
 PROMPT_TEMPLATE = "GOAL: {goal}\nPROOFSTEP:"
 
@@ -333,7 +334,7 @@ def main(
         data_collator=collator,
     )
 
-    trainer.train()
+    train_and_record_time(trainer, args.output_dir)
 
     if args.use_lora:
         model = model.merge_and_unload()

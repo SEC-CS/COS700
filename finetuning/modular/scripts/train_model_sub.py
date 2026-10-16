@@ -18,6 +18,8 @@ from transformers import (
     TrainingArguments,
 )
 
+from utils.training_stats import train_and_record_time
+
 PROMPT_TEMPLATE = (
     "GOAL: {goal}\n"
     "MANDVARS: {mandvars}\n"
@@ -515,7 +517,7 @@ def main(
         data_collator=collator,
     )
 
-    trainer.train()
+    train_and_record_time(trainer, args.output_dir)
 
     if args.use_lora:
         model = model.merge_and_unload()
