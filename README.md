@@ -85,7 +85,7 @@ just proof_search_residual_modular <size> [seed] [attempts] [temperature] [max_v
 
 For example, `just proof_search_residual_modular longest 0 3 0.8` runs three attempts per theorem at temperature 0.8 with seed 0.
 
-Every run is seeded (default `0`, set by the `seed` variable at the top of the justfile), and the seed is part of each output file name -- `<size>_expansions_seed<seed>.csv`, `<size>_theorems_proved_seed<seed>.txt` and `<size>_stats_seed<seed>.txt` -- so runs with different seeds do not overwrite each other:
+Every run is seeded (default `0`, set by the `seed` variable at the top of the justfile), and the seed is part of each output file name -- `<size>_expansions_seed<seed>.csv`, `<size>_theorems_proved_seed<seed>.txt`, `<size>_tokens_seed<seed>.csv` and `<size>_stats_seed<seed>.txt` -- so runs with different seeds do not overwrite each other. The tokens CSV records, for every test theorem, the prompt tokens fed to the model(s) and the tokens generated, summed over all attempts; the stats file gives the totals and the averages per theorem and per expansion:
 
 ```sh
 just proof_search 1            # every model, seed 1

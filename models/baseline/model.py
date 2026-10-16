@@ -37,6 +37,10 @@ class Model:
                     )
         self.model.eval()
         self._gen_batch_size = None
+        # Running totals read by search/proof_search.py: prompt tokens fed
+        # to the model and tokens it generated (up to EOS), summed over
+        # every returned sequence.
+        self.token_counts = {"input_tokens": 0, "output_tokens": 0}
         self._successes_since_shrink = 0
         self._growth_patience = 20
 
@@ -56,6 +60,7 @@ class Model:
         inputs = self.tokenizer(prompt, return_tensors="pt").to(self.device)
         prompt_len = inputs["input_ids"].shape[1]
         eos_id = self.tokenizer.eos_token_id
+        self.token_counts["input_tokens"] += prompt_len
 
         candidates: dict[str, float] = {}
 
@@ -124,6 +129,7 @@ class Model:
                     full_ids.index(eos_id) if eos_id in full_ids else len(full_ids)
                 )
                 gen_ids = full_ids[:gen_len]
+                self.token_counts["output_tokens"] += gen_len
 
                 logprob = transition_scores[i][:gen_len].sum().item()
                 text = self.tokenizer.decode(gen_ids, skip_special_tokens=True).strip()

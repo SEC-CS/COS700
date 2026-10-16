@@ -128,6 +128,7 @@ proof_search_baseline size seed=seed:
     --expansions-output results/baseline/{{size}}_expansions_seed{{seed}}.csv \
     --proved-output results/baseline/{{size}}_theorems_proved_seed{{seed}}.txt \
     --stats-output results/baseline/{{size}}_stats_seed{{seed}}.txt \
+    --tokens-output results/baseline/{{size}}_tokens_seed{{seed}}.csv \
     --seed {{seed}} \
     --attempts 1 \
     --expansions 32 \
@@ -145,6 +146,7 @@ proof_search_modular size seed=seed:
     --expansions-output results/modular/{{size}}_expansions_seed{{seed}}.csv \
     --proved-output results/modular/{{size}}_theorems_proved_seed{{seed}}.txt \
     --stats-output results/modular/{{size}}_stats_seed{{seed}}.txt \
+    --tokens-output results/modular/{{size}}_tokens_seed{{seed}}.csv \
     --seed {{seed}} \
     --attempts 1 \
     --expansions 32 \
@@ -164,6 +166,7 @@ proof_search_residual_baseline size seed=seed:
     --expansions-output results/residual/baseline/{{size}}_expansions_seed{{seed}}.csv \
     --proved-output results/residual/baseline/{{size}}_theorems_proved_seed{{seed}}.txt \
     --stats-output results/residual/baseline/{{size}}_stats_seed{{seed}}.txt \
+    --tokens-output results/residual/baseline/{{size}}_tokens_seed{{seed}}.csv \
     --seed {{seed}} \
     --attempts 1 \
     --expansions 32 \
@@ -183,6 +186,7 @@ proof_search_residual_modular size seed=seed attempts="1" temperature="1.0" max_
     --expansions-output results/residual/modular/{{size}}_expansions_seed{{seed}}.csv \
     --proved-output results/residual/modular/{{size}}_theorems_proved_seed{{seed}}.txt \
     --stats-output results/residual/modular/{{size}}_stats_seed{{seed}}.txt \
+    --tokens-output results/residual/modular/{{size}}_tokens_seed{{seed}}.csv \
     --seed {{seed}} \
     --attempts {{attempts}} \
     --expansions 32 \

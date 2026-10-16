@@ -451,6 +451,22 @@ class TheoremResult:
     total_candidates: int
     proof_steps: int
     attempts_used: int
+    input_tokens: int = 0
+    output_tokens: int = 0
+
+
+def find_token_counts(model) -> Optional[dict]:
+    """
+    Returns the running {input_tokens, output_tokens} totals of the model
+    that actually runs the network, unwrapping residual adapters (which
+    keep the model they wrap in `.model`). None if the model doesn't count.
+    """
+    while model is not None:
+        counts = getattr(model, "token_counts", None)
+        if isinstance(counts, dict):
+            return counts
+        model = getattr(model, "model", None)
+    return None
 
 
 def evaluate(
@@ -465,6 +481,7 @@ def evaluate(
     demo: bool = False,
     proved_output: str = None,
     expansions_output: str = None,
+    tokens_output: str = None,
     progress_every: int = 1,
     heartbeat_every: int = 20,
     temperature: float = 1.0,
@@ -509,6 +526,14 @@ def evaluate(
             "proof_label,expansions,non_first_candidate_steps,max_candidate_rank\n"
         )
 
+    token_counts = find_token_counts(model)
+    tokens_file = None
+    if tokens_output:
+        tokens_file = open(tokens_output, "w")
+        tokens_file.write(
+            "proof_label,proved,attempts,expansions,input_tokens,output_tokens\n"
+        )
+
     for i, label in enumerate(theorem_order):
         root_goal = theorem_goals[label]
 
@@ -520,6 +545,7 @@ def evaluate(
         best_expansions = -1
         total_time = 0.0
         total_expansions = 0
+        tokens_before = dict(token_counts) if token_counts else None
         total_candidates = 0
         proof_steps = 0
         attempts_used = 0
@@ -589,6 +615,19 @@ def evaluate(
         if best_time == float("inf"):
             best_time = total_time
 
+        input_tokens = output_tokens = 0
+        if token_counts is not None:
+            input_tokens = token_counts["input_tokens"] - tokens_before["input_tokens"]
+            output_tokens = (
+                token_counts["output_tokens"] - tokens_before["output_tokens"]
+            )
+        if tokens_file is not None:
+            tokens_file.write(
+                f"{label},{proved},{attempts_used},{total_expansions},"
+                f"{input_tokens},{output_tokens}\n"
+            )
+            tokens_file.flush()
+
         results.append(
             TheoremResult(
                 label=label,
@@ -600,6 +639,8 @@ def evaluate(
                 total_candidates=total_candidates,
                 proof_steps=proof_steps,
                 attempts_used=attempts_used,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
             )
         )
 
@@ -619,6 +660,8 @@ def evaluate(
         proved_file.close()
     if expansions_file is not None:
         expansions_file.close()
+    if tokens_file is not None:
+        tokens_file.close()
 
     proved_results = [r for r in results if r.proved]
     n_proved = len(proved_results)
@@ -637,6 +680,15 @@ def evaluate(
     )
     avg_proof_steps = sum(r.proof_steps for r in proved_results) / max(n_proved, 1)
 
+    # Token usage covers every attempt on every theorem, proved or not.
+    total_input_tokens = sum(r.input_tokens for r in results)
+    total_output_tokens = sum(r.output_tokens for r in results)
+    all_expansions = sum(r.total_expansions for r in results)
+    avg_input_tokens = total_input_tokens / max(total, 1)
+    avg_output_tokens = total_output_tokens / max(total, 1)
+    input_per_expansion = total_input_tokens / max(all_expansions, 1)
+    output_per_expansion = total_output_tokens / max(all_expansions, 1)
+
     elapsed = time.time() - overall_start
     summary = {
         "model": model_name,
@@ -650,6 +702,12 @@ def evaluate(
         "avg_proof_steps": round(avg_proof_steps, 1),
         "elapsed_time_s": round(elapsed, 2),
         "theorems_written_to_file": theorems_written,
+        "total_input_tokens": total_input_tokens,
+        "total_output_tokens": total_output_tokens,
+        "avg_input_tokens_per_theorem": round(avg_input_tokens, 1),
+        "avg_output_tokens_per_theorem": round(avg_output_tokens, 1),
+        "avg_input_tokens_per_expansion": round(input_per_expansion, 1),
+        "avg_output_tokens_per_expansion": round(output_per_expansion, 1),
     }
 
     print(f"\n{'=' * 60}")
@@ -670,6 +728,13 @@ def evaluate(
         f"(over {len(active_results)} theorems with any candidates)"
     )
     print(f"  Avg proof length (steps)  : {avg_proof_steps:.1f}")
+    print(
+        f"  Tokens (all attempts)     : input={total_input_tokens}, "
+        f"output={total_output_tokens}  (per theorem: "
+        f"{avg_input_tokens:.1f} in / {avg_output_tokens:.1f} out; per "
+        f"expansion: {input_per_expansion:.1f} in / "
+        f"{output_per_expansion:.1f} out)"
+    )
 
     if proved_output:
         print(
@@ -698,6 +763,13 @@ def evaluate(
             f"(over {len(active_results)} theorems with any candidates)"
         ),
         f"Avg proof length (steps)  : {avg_proof_steps:.1f}",
+        (
+            f"Tokens (all attempts)     : input={total_input_tokens}, "
+            f"output={total_output_tokens}  (per theorem: "
+            f"{avg_input_tokens:.1f} in / {avg_output_tokens:.1f} out; per "
+            f"expansion: {input_per_expansion:.1f} in / "
+            f"{output_per_expansion:.1f} out)"
+        ),
     ]
     if proved_output:
         stats_lines.append(
@@ -786,6 +858,12 @@ def main(add_args=None, wrap_model=None, doc=None):
         "expansions -- the number of expansions "
         "the successful attempt used -- for every "
         "proved theorem, during --eval",
+    )
+    parser.add_argument(
+        "--tokens-output",
+        default=None,
+        help="Path to write a CSV of input and output token counts "
+        "for every theorem (proved or not), during --eval",
     )
     parser.add_argument(
         "--stats-output",
@@ -918,6 +996,7 @@ def main(add_args=None, wrap_model=None, doc=None):
             demo=args.demo,
             proved_output=args.proved_output,
             expansions_output=args.expansions_output,
+            tokens_output=args.tokens_output,
             stats_output=args.stats_output,
             seed=args.seed,
             progress_every=args.progress_every,

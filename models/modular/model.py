@@ -111,6 +111,11 @@ class Model:
         self.mm = None
         self._theorem_info_cache = {}
         self.empty_substitution_labels = set()
+        # Running totals read by search/proof_search.py: prompt tokens fed
+        # to the classifier and the substitution model, and tokens the
+        # substitution model generated (up to EOS), summed over every
+        # returned sequence. The classifier generates no tokens.
+        self.token_counts = {"input_tokens": 0, "output_tokens": 0}
 
     def set_mm(self, mm):
         self.mm = mm
@@ -148,6 +153,7 @@ class Model:
             max_length=THEOREM_MAX_LENGTH,
             return_tensors="pt",
         ).to(self.device)
+        self.token_counts["input_tokens"] += inputs["input_ids"].shape[1]
 
         with torch.no_grad():
             logits = self.theorem_model(**inputs).logits[0]
@@ -208,6 +214,9 @@ class Model:
                 return_tensors="pt",
             ).to(self.device)
             prompt_len = inputs["input_ids"].shape[1]
+            self.token_counts["input_tokens"] += int(
+                inputs["attention_mask"].sum().item()
+            )
 
             with torch.inference_mode():
                 outputs = self.substitution_model.generate(
@@ -238,6 +247,8 @@ class Model:
                     if len(eos_positions)
                     else len(generated_ids)
                 )
+
+                self.token_counts["output_tokens"] += length
 
                 text = self.substitution_tokenizer.decode(
                     generated_ids[:length], skip_special_tokens=True
