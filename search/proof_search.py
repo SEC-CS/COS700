@@ -469,6 +469,8 @@ def evaluate(
     heartbeat_every: int = 20,
     temperature: float = 1.0,
     max_valid_per_goal: int = 1,
+    stats_output: str = None,
+    seed: int = None,
 ) -> tuple[dict, list[TheoremResult]]:
     """
     Evaluate the prover on a split and collect all metrics.
@@ -680,9 +682,10 @@ def evaluate(
         )
     print(f"{'=' * 60}")
 
-    stats_path = os.path.join(os.getcwd(), "stats.txt")
+    stats_path = stats_output or os.path.join(os.getcwd(), "stats.txt")
     stats_lines = [
         f"Results for: {model_name}",
+        f"Seed                      : {seed}",
         f"Theorem success rate      : {n_proved}/{total} = {success_rate:.2f}%",
         f"Avg search time (proved)  : {avg_search_time:.4f}s",
         f"Elapsed time              : {elapsed:.2f}s",
@@ -754,6 +757,13 @@ def main(add_args=None, wrap_model=None, doc=None):
     parser.add_argument("--tactics", type=int, default=32)
     parser.add_argument("--max-valid-per-goal", type=int, default=1)
     parser.add_argument("--temperature", type=float, default=1.0)
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=None,
+        help="Seed for python, numpy and torch RNGs so a search run "
+        "can be reproduced (default: unseeded)",
+    )
     parser.add_argument("--verbose", action="store_true")
     parser.add_argument(
         "--demo",
@@ -776,6 +786,12 @@ def main(add_args=None, wrap_model=None, doc=None):
         "expansions -- the number of expansions "
         "the successful attempt used -- for every "
         "proved theorem, during --eval",
+    )
+    parser.add_argument(
+        "--stats-output",
+        default=None,
+        help="Path to write the summary stats to during --eval "
+        "(default: stats.txt in the working directory)",
     )
     parser.add_argument(
         "--progress-every",
@@ -821,6 +837,12 @@ def main(add_args=None, wrap_model=None, doc=None):
     if not args.goal and not args.eval:
         print("ERROR: supply either --goal or --eval")
         sys.exit(1)
+
+    if args.seed is not None:
+        from transformers import set_seed
+
+        set_seed(args.seed)
+        print(f"Seed: {args.seed}")
 
     mmverify_path = args.mmverify or os.path.join(
         os.path.dirname(__file__), "mmverify.py"
@@ -896,6 +918,8 @@ def main(add_args=None, wrap_model=None, doc=None):
             demo=args.demo,
             proved_output=args.proved_output,
             expansions_output=args.expansions_output,
+            stats_output=args.stats_output,
+            seed=args.seed,
             progress_every=args.progress_every,
             heartbeat_every=args.heartbeat_every,
         )

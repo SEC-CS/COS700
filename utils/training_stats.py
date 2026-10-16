@@ -22,6 +22,7 @@ def train_and_record_time(trainer, output_dir: str) -> dict:
     stats = {
         "train_seconds": round(train_seconds, 2),
         "train_hours": round(train_seconds / 3600, 4),
+        "seed": trainer.args.seed,
         "global_steps": result.global_step,
         "train_examples": len(trainer.train_dataset),
         "device": torch.cuda.get_device_name(0)

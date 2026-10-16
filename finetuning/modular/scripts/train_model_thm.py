@@ -17,6 +17,7 @@ from transformers import (
     DataCollatorWithPadding,
     Trainer,
     TrainingArguments,
+    set_seed,
 )
 
 from utils.training_stats import train_and_record_time
@@ -152,6 +153,13 @@ def main(
     parser.add_argument("--eval-steps", type=int, default=250)
     parser.add_argument("--save-steps", type=int, default=250)
     parser.add_argument(
+        "--seed",
+        type=int,
+        default=42,
+        help="Seed for weight initialisation, data shuffling and "
+        "dropout (default 42, the Hugging Face default)",
+    )
+    parser.add_argument(
         "--max-steps",
         type=int,
         default=-1,
@@ -222,6 +230,7 @@ def main(
         "--num-workers", type=int, default=2, help="Dataloader worker processes"
     )
     args = parser.parse_args()
+    set_seed(args.seed)
     if args.grad_ckpt is None:
         args.grad_ckpt = not args.use_lora
 
@@ -358,6 +367,7 @@ def main(
         dataloader_num_workers=args.num_workers,
         dataloader_pin_memory=has_cuda,
         report_to="none",
+        seed=args.seed,
     )
 
     trainer = Trainer(
