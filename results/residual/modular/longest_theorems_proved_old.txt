@@ -1,0 +1,575 @@
+THEOREM: scottexs
+GOAL: [[ ]] |- { x | ( ph /\ A. y ( [. y / x ]. ph -> ( rank ` x ) C_ ( rank ` y ) ) ) } e. _V
+EXPANSIONS: 1
+  GOAL: [[ ]] |- { x | ( ph /\ A. y ( [. y / x ]. ph -> ( rank ` x ) C_ ( rank ` y ) ) ) } e. _V
+  STEP: snex {{ A : x | ( ph /\ A. y ( [. y / x ]. ph -> ( rank ` x ) C_ ( rank ` y ) ) ) }}
+THEOREM: simp-6l
+GOAL: [[ ]] |- ( ( ( ( ( ( ( ph /\ ps ) /\ ch ) /\ th ) /\ ta ) /\ et ) /\ ze ) -> ph )
+EXPANSIONS: 5
+  GOAL: [[ ]] |- ( ( ( ph /\ ps ) /\ ch ) -> ph )
+  STEP: simpll {{ ch : ch }} {{ ph : ph }} {{ ps : ps }}
+  GOAL: [[ ]] |- ( ( ( ( ph /\ ps ) /\ ch ) /\ th ) -> ph )
+  STEP: adantr {{ ch : th }} {{ ph : ( ( ph /\ ps ) /\ ch ) }} {{ ps : ph }}
+  GOAL: [[ ]] |- ( ( ( ( ( ph /\ ps ) /\ ch ) /\ th ) /\ ta ) -> ph )
+  STEP: adantr {{ ch : ta }} {{ ph : ( ( ( ph /\ ps ) /\ ch ) /\ th ) }} {{ ps : ph }}
+  GOAL: [[ ]] |- ( ( ( ( ( ( ph /\ ps ) /\ ch ) /\ th ) /\ ta ) /\ et ) -> ph )
+  STEP: adantr {{ ch : et }} {{ ph : ( ( ( ( ph /\ ps ) /\ ch ) /\ th ) /\ ta ) }} {{ ps : ph }}
+  GOAL: [[ ]] |- ( ( ( ( ( ( ( ph /\ ps ) /\ ch ) /\ th ) /\ ta ) /\ et ) /\ ze ) -> ph )
+  STEP: adantr {{ ch : ze }} {{ ph : ( ( ( ( ( ph /\ ps ) /\ ch ) /\ th ) /\ ta ) /\ et ) }} {{ ps : ph }}
+THEOREM: reu5
+GOAL: [[ ]] |- ( E! x e. A ph <-> ( E. x e. A ph /\ E* x e. A ph ) )
+EXPANSIONS: 1
+  GOAL: [[ ]] |- ( E! x e. A ph <-> ( E. x e. A ph /\ E* x e. A ph ) )
+  STEP: eu5 {{ ph : e. A ph }} {{ x : x }}
+THEOREM: simp13
+GOAL: [[ ]] |- ( ( ( ph /\ ps /\ ch ) /\ th /\ ta ) -> ch )
+EXPANSIONS: 1
+  GOAL: [[ ]] |- ( ( ( ph /\ ps /\ ch ) /\ th /\ ta ) -> ch )
+  STEP: simpl3 {{ ch : ch }} {{ ph : ph }} {{ ps : ps }} {{ th : th /\ ta }}
+THEOREM: nfabd2
+GOAL: [[ |- F/ y ph   |- ( ( ph /\ -. A. x x = y ) -> F/ x ps ) ]] |- ( ph -> F/_ x { y | ps } )
+EXPANSIONS: 3
+  GOAL: [[ |- F/ y ph   |- ( ( ph /\ -. A. x x = y ) -> F/ x ps ) ]] |- F/_ x y | ps
+  STEP: nfcv {{ A : y | ps }} {{ x : x }}
+  GOAL: [[ |- F/ y ph   |- ( ( ph /\ -. A. x x = y ) -> F/ x ps ) ]] |- F/_ x { y | ps }
+  STEP: nfsn {{ A : y | ps }} {{ x : x }}
+  GOAL: [[ |- F/ y ph   |- ( ( ph /\ -. A. x x = y ) -> F/ x ps ) ]] |- ( ph -> F/_ x { y | ps } )
+  STEP: a1i {{ ph : F/_ x { y | ps } }} {{ ps : ph }}
+THEOREM: pm4.63
+GOAL: [[ ]] |- ( -. ( ph -> -. ps ) <-> ( ph /\ ps ) )
+EXPANSIONS: 2
+  GOAL: [[ ]] |- ( ( ph /\ ps ) <-> -. ( ph -> -. ps ) )
+  STEP: df-an {{ ph : ph }} {{ ps : ps }}
+  GOAL: [[ ]] |- ( -. ( ph -> -. ps ) <-> ( ph /\ ps ) )
+  STEP: bicomi {{ ph : ( ph /\ ps ) }} {{ ps : -. ( ph -> -. ps ) }}
+THEOREM: rabid
+GOAL: [[ ]] |- ( x e. { x e. A | ph } <-> ( x e. A /\ ph ) )
+EXPANSIONS: 2
+  GOAL: [[ ]] |- ( x = x -> ( ph <-> ph ) )
+  STEP: biidd {{ ph : x = x }} {{ ps : ph }}
+  GOAL: [[ ]] |- ( x e. { x e. A | ph } <-> ( x e. A /\ ph ) )
+  STEP: elrab {{ A : x }} {{ B : A }} {{ ph : ph }} {{ ps : ph }} {{ x : x }}
+THEOREM: 19.41v
+GOAL: [[ ]] |- ( E. x ( ph /\ ps ) <-> ( E. x ph /\ ps ) )
+EXPANSIONS: 2
+  GOAL: [[ ]] |- F/ x ps
+  STEP: nfv {{ ph : ps }} {{ x : x }}
+  GOAL: [[ ]] |- ( E. x ( ph /\ ps ) <-> ( E. x ph /\ ps ) )
+  STEP: 19.41 {{ ph : ph }} {{ ps : ps }} {{ x : x }}
+THEOREM: nfco
+GOAL: [[ |- F/_ x A   |- F/_ x B ]] |- F/_ x ( A o. B )
+EXPANSIONS: 4
+  GOAL: [[ |- F/_ x A   |- F/_ x B ]] |- F/_ x A
+  STEP: nfcv {{ A : A }} {{ x : x }}
+  GOAL: [[ |- F/_ x A   |- F/_ x B ]] |- F/_ x o.
+  STEP: nfcv {{ A : o. }} {{ x : x }}
+  GOAL: [[ |- F/_ x A   |- F/_ x B ]] |- F/_ x B
+  STEP: nfcv {{ A : B }} {{ x : x }}
+  GOAL: [[ |- F/_ x A   |- F/_ x B ]] |- F/_ x ( A o. B )
+  STEP: nfov {{ A : A }} {{ B : B }} {{ F : o. }} {{ x : x }}
+THEOREM: axc11nOLD
+GOAL: [[ ]] |- ( A. x x = y -> A. y y = x )
+EXPANSIONS: 1
+  GOAL: [[ ]] |- ( A. x x = y -> A. y y = x )
+  STEP: aevlem {{ t : x }} {{ x : x }} {{ y : y }} {{ z : y }}
+THEOREM: simp111
+GOAL: [[ ]] |- ( ( ( ( ph /\ ps /\ ch ) /\ th /\ ta ) /\ et /\ ze ) -> ph )
+EXPANSIONS: 2
+  GOAL: [[ ]] |- ( ( ( ph /\ ps /\ ch ) /\ th /\ ta ) -> ph )
+  STEP: simpl1 {{ ch : ch }} {{ ph : ph }} {{ ps : ps }} {{ th : th /\ ta }}
+  GOAL: [[ ]] |- ( ( ( ( ph /\ ps /\ ch ) /\ th /\ ta ) /\ et /\ ze ) -> ph )
+  STEP: adantr {{ ch : et /\ ze }} {{ ph : ( ( ph /\ ps /\ ch ) /\ th /\ ta ) }} {{ ps : ph }}
+THEOREM: albiim
+GOAL: [[ ]] |- ( A. x ( ph <-> ps ) <-> ( A. x ( ph -> ps ) /\ A. x ( ps -> ph ) ) )
+EXPANSIONS: 4
+  GOAL: [[ ]] |- ( ( ph <-> ps ) <-> ( ( ph -> ps ) /\ ( ps -> ph ) ) )
+  STEP: dfbi2 {{ ph : ph }} {{ ps : ps }}
+  GOAL: [[ ]] |- ( A. x ( ph <-> ps ) <-> A. x ( ( ph -> ps ) /\ ( ps -> ph ) ) )
+  STEP: albii {{ ph : ( ph <-> ps ) }} {{ ps : ( ( ph -> ps ) /\ ( ps -> ph ) ) }} {{ x : x }}
+  GOAL: [[ ]] |- ( A. x ( ( ph -> ps ) /\ ( ps -> ph ) ) <-> ( A. x ( ph -> ps ) /\ A. x ( ps -> ph ) ) )
+  STEP: 19.26 {{ ph : ( ph -> ps ) }} {{ ps : ( ps -> ph ) }} {{ x : x }}
+  GOAL: [[ ]] |- ( A. x ( ph <-> ps ) <-> ( A. x ( ph -> ps ) /\ A. x ( ps -> ph ) ) )
+  STEP: bitri {{ ch : ( A. x ( ph -> ps ) /\ A. x ( ps -> ph ) ) }} {{ ph : A. x ( ph <-> ps ) }} {{ ps : A. x ( ( ph -> ps ) /\ ( ps -> ph ) ) }}
+THEOREM: rabeqf
+GOAL: [[ |- F/_ x A   |- F/_ x B ]] |- ( A = B -> { x e. A | ph } = { x e. B | ph } )
+EXPANSIONS: 1
+  GOAL: [[ |- F/_ x A   |- F/_ x B ]] |- ( A = B -> { x e. A | ph } = { x e. B | ph } )
+  STEP: rabeq {{ A : A }} {{ B : B }} {{ ph : ph }} {{ x : x }}
+THEOREM: raleq
+GOAL: [[ ]] |- ( A = B -> ( A. x e. A ph <-> A. x e. B ph ) )
+EXPANSIONS: 7
+  GOAL: [[ ]] |- ( A = B -> ( x e. A <-> x e. B ) )
+  STEP: eleq2 {{ A : A }} {{ B : B }} {{ C : x }}
+  GOAL: [[ ]] |- ( A = B -> ( ph <-> ph ) )
+  STEP: biidd {{ ph : A = B }} {{ ps : ph }}
+  GOAL: [[ ]] |- ( A = B -> ( ( x e. A -> ph ) <-> ( x e. B -> ph ) ) )
+  STEP: imbi12d {{ ch : x e. B }} {{ ph : A = B }} {{ ps : x e. A }} {{ ta : ph }} {{ th : ph }}
+  GOAL: [[ ]] |- ( A = B -> ( A. x ( x e. A -> ph ) <-> A. x ( x e. B -> ph ) ) )
+  STEP: albidv {{ ch : ( x e. B -> ph ) }} {{ ph : A = B }} {{ ps : ( x e. A -> ph ) }} {{ x : x }}
+  GOAL: [[ ]] |- ( A. x e. A ph <-> A. x ( x e. A -> ph ) )
+  STEP: df-ral {{ A : A }} {{ ph : ph }} {{ x : x }}
+  GOAL: [[ ]] |- ( A. x e. B ph <-> A. x ( x e. B -> ph ) )
+  STEP: df-ral {{ A : B }} {{ ph : ph }} {{ x : x }}
+  GOAL: [[ ]] |- ( A = B -> ( A. x e. A ph <-> A. x e. B ph ) )
+  STEP: 3bitr4g {{ ch : A. x ( x e. B -> ph ) }} {{ ph : A = B }} {{ ps : A. x ( x e. A -> ph ) }} {{ ta : A. x e. B ph }} {{ th : A. x e. A ph }}
+THEOREM: nfeqf1
+GOAL: [[ ]] |- ( -. A. x x = y -> F/ x y = z )
+EXPANSIONS: 3
+  GOAL: [[ ]] |- ( -. A. x x = y -> F/_ x y )
+  STEP: nfcvf {{ x : x }} {{ y : y }}
+  GOAL: [[ ]] |- ( -. A. x x = y -> F/_ x z )
+  STEP: nfcvd {{ A : z }} {{ ph : -. A. x x = y }} {{ x : x }}
+  GOAL: [[ ]] |- ( -. A. x x = y -> F/ x y = z )
+  STEP: nfeqd {{ A : y }} {{ B : z }} {{ ph : -. A. x x = y }} {{ x : x }}
+THEOREM: axc11n
+GOAL: [[ ]] |- ( A. x x = y -> A. y y = x )
+EXPANSIONS: 1
+  GOAL: [[ ]] |- ( A. x x = y -> A. y y = x )
+  STEP: aevlem {{ t : x }} {{ x : x }} {{ y : y }} {{ z : y }}
+THEOREM: pm3.21
+GOAL: [[ ]] |- ( ph -> ( ps -> ( ps /\ ph ) ) )
+EXPANSIONS: 2
+  GOAL: [[ ]] |- ( ps -> ( ph -> ( ps /\ ph ) ) )
+  STEP: pm3.2 {{ ph : ps }} {{ ps : ph }}
+  GOAL: [[ ]] |- ( ph -> ( ps -> ( ps /\ ph ) ) )
+  STEP: com12 {{ ch : ( ps /\ ph ) }} {{ ph : ps }} {{ ps : ph }}
+THEOREM: exancom
+GOAL: [[ ]] |- ( E. x ( ph /\ ps ) <-> E. x ( ps /\ ph ) )
+EXPANSIONS: 2
+  GOAL: [[ ]] |- ( ( ph /\ ps ) <-> ( ps /\ ph ) )
+  STEP: ancom {{ ph : ph }} {{ ps : ps }}
+  GOAL: [[ ]] |- ( E. x ( ph /\ ps ) <-> E. x ( ps /\ ph ) )
+  STEP: exbii {{ ph : ( ph /\ ps ) }} {{ ps : ( ps /\ ph ) }} {{ x : x }}
+THEOREM: simpr32
+GOAL: [[ ]] |- ( ( et /\ ( th /\ ta /\ ( ph /\ ps /\ ch ) ) ) -> ps )
+EXPANSIONS: 3
+  GOAL: [[ ]] |- ( ( ph /\ ps /\ ch ) -> ps )
+  STEP: simp2 {{ ch : ch }} {{ ph : ph }} {{ ps : ps }}
+  GOAL: [[ ]] |- ( ( th /\ ta /\ ( ph /\ ps /\ ch ) ) -> ps )
+  STEP: 3ad2ant3 {{ ch : ps }} {{ ph : ( ph /\ ps /\ ch ) }} {{ ps : th }} {{ th : ta }}
+  GOAL: [[ ]] |- ( ( et /\ ( th /\ ta /\ ( ph /\ ps /\ ch ) ) ) -> ps )
+  STEP: adantl {{ ch : et }} {{ ph : ( th /\ ta /\ ( ph /\ ps /\ ch ) ) }} {{ ps : ps }}
+THEOREM: 19.12
+GOAL: [[ ]] |- ( E. x A. y ph -> A. y E. x ph )
+EXPANSIONS: 5
+  GOAL: [[ ]] |- F/ x E. x ph
+  STEP: nfe1 {{ ph : ph }} {{ x : x }}
+  GOAL: [[ ]] |- F/ x A. y E. x ph
+  STEP: nfal {{ ph : E. x ph }} {{ x : x }} {{ y : y }}
+  GOAL: [[ ]] |- ( ph -> E. x ph )
+  STEP: 19.8a {{ ph : ph }} {{ x : x }}
+  GOAL: [[ ]] |- ( A. y ph -> A. y E. x ph )
+  STEP: alimi {{ ph : ph }} {{ ps : E. x ph }} {{ x : y }}
+  GOAL: [[ ]] |- ( E. x A. y ph -> A. y E. x ph )
+  STEP: exlimi {{ ph : A. y ph }} {{ ps : A. y E. x ph }} {{ x : x }}
+THEOREM: hbsb
+GOAL: [[ |- ( ph -> A. z ph ) ]] |- ( [ y / x ] ph -> A. z [ y / x ] ph )
+EXPANSIONS: 1
+  GOAL: [[ |- ( ph -> A. z ph ) ]] |- ( [ y / x ] ph -> A. z [ y / x ] ph )
+  STEP: ax-5 {{ ph : [ y / x ] ph }} {{ x : z }}
+THEOREM: simp1r
+GOAL: [[ ]] |- ( ( ( ph /\ ps ) /\ ch /\ th ) -> ps )
+EXPANSIONS: 1
+  GOAL: [[ ]] |- ( ( ( ph /\ ps ) /\ ch /\ th ) -> ps )
+  STEP: simplr {{ ch : ch /\ th }} {{ ph : ph }} {{ ps : ps }}
+THEOREM: vuniex
+GOAL: [[ ]] |- U. x e. _V
+EXPANSIONS: 2
+  GOAL: [[ ]] |- x e. _V
+  STEP: vex {{ x : x }}
+  GOAL: [[ ]] |- U. x e. _V
+  STEP: uniex {{ A : x }}
+THEOREM: foeq3
+GOAL: [[ ]] |- ( A = B -> ( F : C -onto-> A <-> F : C -onto-> B ) )
+EXPANSIONS: 5
+  GOAL: [[ ]] |- ( A = B -> ( ran F = A <-> ran F = B ) )
+  STEP: eqeq2 {{ A : A }} {{ B : B }} {{ C : ran F }}
+  GOAL: [[ ]] |- ( A = B -> ( ( F Fn C /\ ran F = A ) <-> ( F Fn C /\ ran F = B ) ) )
+  STEP: anbi2d {{ ch : ran F = B }} {{ ph : A = B }} {{ ps : ran F = A }} {{ th : F Fn C }}
+  GOAL: [[ ]] |- ( F : C -onto-> A <-> ( F Fn C /\ ran F = A ) )
+  STEP: df-fo {{ A : C }} {{ B : A }} {{ F : F }}
+  GOAL: [[ ]] |- ( F : C -onto-> B <-> ( F Fn C /\ ran F = B ) )
+  STEP: df-fo {{ A : C }} {{ B : B }} {{ F : F }}
+  GOAL: [[ ]] |- ( A = B -> ( F : C -onto-> A <-> F : C -onto-> B ) )
+  STEP: 3bitr4g {{ ch : ( F Fn C /\ ran F = B ) }} {{ ph : A = B }} {{ ps : ( F Fn C /\ ran F = A ) }} {{ ta : F : C -onto-> B }} {{ th : F : C -onto-> A }}
+THEOREM: pm2.01
+GOAL: [[ ]] |- ( ( ph -> -. ph ) -> -. ph )
+EXPANSIONS: 2
+  GOAL: [[ ]] |- ( -. ph -> -. ph )
+  STEP: id {{ ph : -. ph }}
+  GOAL: [[ ]] |- ( ( ph -> -. ph ) -> -. ph )
+  STEP: ja {{ ch : -. ph }} {{ ph : ph }} {{ ps : -. ph }}
+THEOREM: dmeq
+GOAL: [[ ]] |- ( A = B -> dom A = dom B )
+EXPANSIONS: 2
+  GOAL: [[ ]] |- ( A = B -> A = B )
+  STEP: id {{ ph : A = B }}
+  GOAL: [[ ]] |- ( A = B -> dom A = dom B )
+  STEP: dmeqd {{ A : A }} {{ B : B }} {{ ph : A = B }}
+THEOREM: ax9v2
+GOAL: [[ ]] |- ( x = y -> ( z e. x -> z e. y ) )
+EXPANSIONS: 1
+  GOAL: [[ ]] |- ( x = y -> ( z e. x -> z e. y ) )
+  STEP: ax9 {{ x : x }} {{ y : y }} {{ z : z }}
+THEOREM: nfexd
+GOAL: [[ |- F/ y ph   |- ( ph -> F/ x ps ) ]] |- ( ph -> F/ x E. y ps )
+EXPANSIONS: 1
+  GOAL: [[ |- F/ y ph   |- ( ph -> F/ x ps ) ]] |- ( ph -> F/ x E. y ps )
+  STEP: nfvd {{ ph : ph }} {{ ps : E. y ps }} {{ x : x }}
+THEOREM: dftru2
+GOAL: [[ ]] |- ( T. <-> ( ph -> ph ) )
+EXPANSIONS: 6
+  GOAL: [[ ]] |- ( T. -> ( ph -> ph ) )
+  STEP: idd {{ ph : T. }} {{ ps : ph }}
+  GOAL: [[ ]] |- T.
+  STEP: tru
+  GOAL: [[ ]] |- ( -. ph -> T. )
+  STEP: a1i {{ ph : T. }} {{ ps : -. ph }}
+  GOAL: [[ ]] |- ( ph -> T. )
+  STEP: a1i {{ ph : T. }} {{ ps : ph }}
+  GOAL: [[ ]] |- ( ( ph -> ph ) -> T. )
+  STEP: ja {{ ch : T. }} {{ ph : ph }} {{ ps : ph }}
+  GOAL: [[ ]] |- ( T. <-> ( ph -> ph ) )
+  STEP: impbii {{ ph : T. }} {{ ps : ( ph -> ph ) }}
+THEOREM: dfima2
+GOAL: [[ ]] |- ( A " B ) = { y | E. x e. B x A y }
+EXPANSIONS: 3
+  GOAL: [[ ]] |- y e. _V
+  STEP: vex {{ x : y }}
+  GOAL: [[ ]] |- ( y e. ( A " B ) <-> E. x e. B x A y )
+  STEP: elima {{ A : y }} {{ B : A }} {{ C : B }} {{ x : x }}
+  GOAL: [[ ]] |- ( A " B ) = { y | E. x e. B x A y }
+  STEP: abbi2i {{ A : ( A " B ) }} {{ ph : E. x e. B x A y }} {{ x : y }}
+THEOREM: freq1
+GOAL: [[ ]] |- ( R = S -> ( R Fr A <-> S Fr A ) )
+EXPANSIONS: 1
+  GOAL: [[ ]] |- ( R = S -> ( R Fr A <-> S Fr A ) )
+  STEP: breq1 {{ A : R }} {{ B : S }} {{ C : A }} {{ R : Fr }}
+THEOREM: luklem5
+GOAL: [[ ]] |- ( ph -> ( ps -> ph ) )
+EXPANSIONS: 1
+  GOAL: [[ ]] |- ( ph -> ( ps -> ph ) )
+  STEP: ax-1 {{ ph : ph }} {{ ps : ps }}
+THEOREM: an42
+GOAL: [[ ]] |- ( ( ( ph /\ ps ) /\ ( ch /\ th ) ) <-> ( ( ph /\ ch ) /\ ( th /\ ps ) ) )
+EXPANSIONS: 4
+  GOAL: [[ ]] |- ( ( ( ph /\ ps ) /\ ( ch /\ th ) ) <-> ( ( ph /\ ch ) /\ ( ps /\ th ) ) )
+  STEP: an4 {{ ch : ch }} {{ ph : ph }} {{ ps : ps }} {{ th : th }}
+  GOAL: [[ ]] |- ( ( ps /\ th ) <-> ( th /\ ps ) )
+  STEP: ancom {{ ph : ps }} {{ ps : th }}
+  GOAL: [[ ]] |- ( ( ( ph /\ ch ) /\ ( ps /\ th ) ) <-> ( ( ph /\ ch ) /\ ( th /\ ps ) ) )
+  STEP: anbi2i {{ ch : ( ph /\ ch ) }} {{ ph : ( ps /\ th ) }} {{ ps : ( th /\ ps ) }}
+  GOAL: [[ ]] |- ( ( ( ph /\ ps ) /\ ( ch /\ th ) ) <-> ( ( ph /\ ch ) /\ ( th /\ ps ) ) )
+  STEP: bitri {{ ch : ( ( ph /\ ch ) /\ ( th /\ ps ) ) }} {{ ph : ( ( ph /\ ps ) /\ ( ch /\ th ) ) }} {{ ps : ( ( ph /\ ch ) /\ ( ps /\ th ) ) }}
+THEOREM: difss2
+GOAL: [[ ]] |- ( A C_ ( B \ C ) -> A C_ B )
+EXPANSIONS: 3
+  GOAL: [[ ]] |- ( B \ C ) C_ B
+  STEP: difss {{ A : B }} {{ B : C }}
+  GOAL: [[ ]] |- ( ( A C_ ( B \ C ) /\ ( B \ C ) C_ B ) -> A C_ B )
+  STEP: sstr {{ A : A }} {{ B : ( B \ C ) }} {{ C : B }}
+  GOAL: [[ ]] |- ( A C_ ( B \ C ) -> A C_ B )
+  STEP: mpan2 {{ ch : A C_ B }} {{ ph : A C_ ( B \ C ) }} {{ ps : ( B \ C ) C_ B }}
+THEOREM: reurmo
+GOAL: [[ ]] |- ( E! x e. A ph -> E* x e. A ph )
+EXPANSIONS: 1
+  GOAL: [[ ]] |- ( E! x e. A ph -> E* x e. A ph )
+  STEP: eumo {{ ph : e. A ph }} {{ x : x }}
+THEOREM: simp32l
+GOAL: [[ ]] |- ( ( ta /\ et /\ ( ch /\ ( ph /\ ps ) /\ th ) ) -> ph )
+EXPANSIONS: 2
+  GOAL: [[ ]] |- ( ( ch /\ ( ph /\ ps ) /\ th ) -> ph )
+  STEP: simp2l {{ ch : ps }} {{ ph : ch }} {{ ps : ph }} {{ th : th }}
+  GOAL: [[ ]] |- ( ( ta /\ et /\ ( ch /\ ( ph /\ ps ) /\ th ) ) -> ph )
+  STEP: 3ad2ant3 {{ ch : ph }} {{ ph : ( ch /\ ( ph /\ ps ) /\ th ) }} {{ ps : ta }} {{ th : et }}
+THEOREM: kardex
+GOAL: [[ ]] |- { x | ( x ~~ A /\ A. y ( y ~~ A -> ( rank ` x ) C_ ( rank ` y ) ) ) } e. _V
+EXPANSIONS: 1
+  GOAL: [[ ]] |- { x | ( x ~~ A /\ A. y ( y ~~ A -> ( rank ` x ) C_ ( rank ` y ) ) ) } e. _V
+  STEP: snex {{ A : x | ( x ~~ A /\ A. y ( y ~~ A -> ( rank ` x ) C_ ( rank ` y ) ) ) }}
+THEOREM: falimfal
+GOAL: [[ ]] |- ( ( F. -> F. ) <-> T. )
+EXPANSIONS: 5
+  GOAL: [[ ]] |- T.
+  STEP: tru
+  GOAL: [[ ]] |- ( T. -> ( ( F. -> F. ) -> T. ) )
+  STEP: ax-1 {{ ph : T. }} {{ ps : ( F. -> F. ) }}
+  GOAL: [[ ]] |- ( ( F. -> F. ) -> T. )
+  STEP: ax-mp {{ ph : T. }} {{ ps : ( ( F. -> F. ) -> T. ) }}
+  GOAL: [[ ]] |- ( T. -> ( F. -> F. ) )
+  STEP: idd {{ ph : T. }} {{ ps : F. }}
+  GOAL: [[ ]] |- ( ( F. -> F. ) <-> T. )
+  STEP: impbii {{ ph : ( F. -> F. ) }} {{ ps : T. }}
+THEOREM: nic-luk2
+GOAL: [[ ]] |- ( ( -. ph -> ph ) -> ph )
+EXPANSIONS: 3
+  GOAL: [[ ]] |- ( -. -. ph -> ph )
+  STEP: notnotr {{ ph : ph }}
+  GOAL: [[ ]] |- ( ph -> ph )
+  STEP: id {{ ph : ph }}
+  GOAL: [[ ]] |- ( ( -. ph -> ph ) -> ph )
+  STEP: ja {{ ch : ph }} {{ ph : -. ph }} {{ ps : ph }}
+THEOREM: 19.41vvvv
+GOAL: [[ ]] |- ( E. w E. x E. y E. z ( ph /\ ps ) <-> ( E. w E. x E. y E. z ph /\ ps ) )
+EXPANSIONS: 13
+  GOAL: [[ ]] |- F/ z ps
+  STEP: nfv {{ ph : ps }} {{ x : z }}
+  GOAL: [[ ]] |- ( E. z ( ph /\ ps ) <-> ( E. z ph /\ ps ) )
+  STEP: 19.41 {{ ph : ph }} {{ ps : ps }} {{ x : z }}
+  GOAL: [[ ]] |- ( E. y E. z ( ph /\ ps ) <-> E. y ( E. z ph /\ ps ) )
+  STEP: exbii {{ ph : E. z ( ph /\ ps ) }} {{ ps : ( E. z ph /\ ps ) }} {{ x : y }}
+  GOAL: [[ ]] |- F/ y ps
+  STEP: nfv {{ ph : ps }} {{ x : y }}
+  GOAL: [[ ]] |- ( E. y ( E. z ph /\ ps ) <-> ( E. y E. z ph /\ ps ) )
+  STEP: 19.41 {{ ph : E. z ph }} {{ ps : ps }} {{ x : y }}
+  GOAL: [[ ]] |- ( E. y E. z ( ph /\ ps ) <-> ( E. y E. z ph /\ ps ) )
+  STEP: bitri {{ ch : ( E. y E. z ph /\ ps ) }} {{ ph : E. y E. z ( ph /\ ps ) }} {{ ps : E. y ( E. z ph /\ ps ) }}
+  GOAL: [[ ]] |- ( E. x E. y E. z ( ph /\ ps ) <-> E. x ( E. y E. z ph /\ ps ) )
+  STEP: exbii {{ ph : E. y E. z ( ph /\ ps ) }} {{ ps : ( E. y E. z ph /\ ps ) }} {{ x : x }}
+  GOAL: [[ ]] |- F/ x ps
+  STEP: nfv {{ ph : ps }} {{ x : x }}
+  GOAL: [[ ]] |- ( E. x ( E. y E. z ph /\ ps ) <-> ( E. x E. y E. z ph /\ ps ) )
+  STEP: 19.41 {{ ph : E. y E. z ph }} {{ ps : ps }} {{ x : x }}
+  GOAL: [[ ]] |- ( E. x E. y E. z ( ph /\ ps ) <-> ( E. x E. y E. z ph /\ ps ) )
+  STEP: bitri {{ ch : ( E. x E. y E. z ph /\ ps ) }} {{ ph : E. x E. y E. z ( ph /\ ps ) }} {{ ps : E. x ( E. y E. z ph /\ ps ) }}
+  GOAL: [[ ]] |- ( E. w E. x E. y E. z ( ph /\ ps ) <-> E. w ( E. x E. y E. z ph /\ ps ) )
+  STEP: exbii {{ ph : E. x E. y E. z ( ph /\ ps ) }} {{ ps : ( E. x E. y E. z ph /\ ps ) }} {{ x : w }}
+  GOAL: [[ ]] |- ( E. w ( E. x E. y E. z ph /\ ps ) <-> ( E. w E. x E. y E. z ph /\ ps ) )
+  STEP: 19.41v {{ ph : E. x E. y E. z ph }} {{ ps : ps }} {{ x : w }}
+  GOAL: [[ ]] |- ( E. w E. x E. y E. z ( ph /\ ps ) <-> ( E. w E. x E. y E. z ph /\ ps ) )
+  STEP: bitri {{ ch : ( E. w E. x E. y E. z ph /\ ps ) }} {{ ph : E. w E. x E. y E. z ( ph /\ ps ) }} {{ ps : E. w ( E. x E. y E. z ph /\ ps ) }}
+THEOREM: simp1l1
+GOAL: [[ ]] |- ( ( ( ( ph /\ ps /\ ch ) /\ th ) /\ ta /\ et ) -> ph )
+EXPANSIONS: 2
+  GOAL: [[ ]] |- ( ( ( ph /\ ps /\ ch ) /\ th ) -> ph )
+  STEP: simpl1 {{ ch : ch }} {{ ph : ph }} {{ ps : ps }} {{ th : th }}
+  GOAL: [[ ]] |- ( ( ( ( ph /\ ps /\ ch ) /\ th ) /\ ta /\ et ) -> ph )
+  STEP: adantr {{ ch : ta /\ et }} {{ ph : ( ( ph /\ ps /\ ch ) /\ th ) }} {{ ps : ph }}
+THEOREM: oveq1
+GOAL: [[ ]] |- ( A = B -> ( A F C ) = ( B F C ) )
+EXPANSIONS: 2
+  GOAL: [[ ]] |- ( A = B -> A = B )
+  STEP: id {{ ph : A = B }}
+  GOAL: [[ ]] |- ( A = B -> ( A F C ) = ( B F C ) )
+  STEP: oveq1d {{ A : A }} {{ B : B }} {{ C : C }} {{ F : F }} {{ ph : A = B }}
+THEOREM: cbvaev
+GOAL: [[ ]] |- ( A. x x = y -> A. z z = y )
+EXPANSIONS: 1
+  GOAL: [[ ]] |- ( A. x x = y -> A. z z = y )
+  STEP: aevlem {{ t : y }} {{ x : x }} {{ y : y }} {{ z : z }}
+THEOREM: hbab
+GOAL: [[ |- ( ph -> A. x ph ) ]] |- ( z e. { y | ph } -> A. x z e. { y | ph } )
+EXPANSIONS: 1
+  GOAL: [[ |- ( ph -> A. x ph ) ]] |- ( z e. { y | ph } -> A. x z e. { y | ph } )
+  STEP: ax-5 {{ ph : z e. { y | ph } }} {{ x : x }}
+THEOREM: drsb2
+GOAL: [[ ]] |- ( A. x x = y -> ( [ x / z ] ph <-> [ y / z ] ph ) )
+EXPANSIONS: 2
+  GOAL: [[ ]] |- ( x = y -> ( [ x / z ] ph <-> [ y / z ] ph ) )
+  STEP: sbequ {{ ph : ph }} {{ x : x }} {{ y : y }} {{ z : z }}
+  GOAL: [[ ]] |- ( A. x x = y -> ( [ x / z ] ph <-> [ y / z ] ph ) )
+  STEP: sps {{ ph : x = y }} {{ ps : ( [ x / z ] ph <-> [ y / z ] ph ) }} {{ x : x }}
+THEOREM: pm4.65
+GOAL: [[ ]] |- ( -. ( -. ph -> ps ) <-> ( -. ph /\ -. ps ) )
+EXPANSIONS: 2
+  GOAL: [[ ]] |- ( ( -. ph /\ -. ps ) <-> -. ( -. ph -> ps ) )
+  STEP: annim {{ ph : -. ph }} {{ ps : ps }}
+  GOAL: [[ ]] |- ( -. ( -. ph -> ps ) <-> ( -. ph /\ -. ps ) )
+  STEP: bicomi {{ ph : ( -. ph /\ -. ps ) }} {{ ps : -. ( -. ph -> ps ) }}
+THEOREM: ax12
+GOAL: [[ ]] |- ( x = y -> ( A. y ph -> A. x ( x = y -> ph ) ) )
+EXPANSIONS: 1
+  GOAL: [[ ]] |- ( x = y -> ( A. y ph -> A. x ( x = y -> ph ) ) )
+  STEP: ax-12 {{ ph : ph }} {{ x : x }} {{ y : y }}
+THEOREM: difeq12
+GOAL: [[ ]] |- ( ( A = B /\ C = D ) -> ( A \ C ) = ( B \ D ) )
+EXPANSIONS: 1
+  GOAL: [[ ]] |- ( ( A = B /\ C = D ) -> ( A \ C ) = ( B \ D ) )
+  STEP: oveq12 {{ A : A }} {{ B : B }} {{ C : C }} {{ D : D }} {{ F : \ }}
+THEOREM: elequ1
+GOAL: [[ ]] |- ( x = y -> ( x e. z <-> y e. z ) )
+EXPANSIONS: 1
+  GOAL: [[ ]] |- ( x = y -> ( x e. z <-> y e. z ) )
+  STEP: eleq1 {{ A : x }} {{ B : y }} {{ C : z }}
+THEOREM: simp2r2
+GOAL: [[ ]] |- ( ( ta /\ ( th /\ ( ph /\ ps /\ ch ) ) /\ et ) -> ps )
+EXPANSIONS: 3
+  GOAL: [[ ]] |- ( ( ph /\ ps /\ ch ) -> ps )
+  STEP: simp2 {{ ch : ch }} {{ ph : ph }} {{ ps : ps }}
+  GOAL: [[ ]] |- ( ( th /\ ( ph /\ ps /\ ch ) ) -> ps )
+  STEP: adantl {{ ch : th }} {{ ph : ( ph /\ ps /\ ch ) }} {{ ps : ps }}
+  GOAL: [[ ]] |- ( ( ta /\ ( th /\ ( ph /\ ps /\ ch ) ) /\ et ) -> ps )
+  STEP: 3ad2ant2 {{ ch : ps }} {{ ph : ( th /\ ( ph /\ ps /\ ch ) ) }} {{ ps : ta }} {{ th : et }}
+THEOREM: ax13w
+GOAL: [[ ]] |- ( -. x = y -> ( y = z -> A. x y = z ) )
+EXPANSIONS: 4
+  GOAL: [[ ]] |- ( -. x = y -> F/_ x y )
+  STEP: nfcvd {{ A : y }} {{ ph : -. x = y }} {{ x : x }}
+  GOAL: [[ ]] |- ( -. x = y -> F/_ x z )
+  STEP: nfcvd {{ A : z }} {{ ph : -. x = y }} {{ x : x }}
+  GOAL: [[ ]] |- ( -. x = y -> F/ x y = z )
+  STEP: nfeqd {{ A : y }} {{ B : z }} {{ ph : -. x = y }} {{ x : x }}
+  GOAL: [[ ]] |- ( -. x = y -> ( y = z -> A. x y = z ) )
+  STEP: nf5rd {{ ph : -. x = y }} {{ ps : y = z }} {{ x : x }}
+THEOREM: hbe1
+GOAL: [[ ]] |- ( E. x ph -> A. x E. x ph )
+EXPANSIONS: 1
+  GOAL: [[ ]] |- ( E. x ph -> A. x E. x ph )
+  STEP: ax-5 {{ ph : E. x ph }} {{ x : x }}
+THEOREM: dfrnf
+GOAL: [[ |- F/_ x A   |- F/_ y A ]] |- ran A = { y | E. x x A y }
+EXPANSIONS: 1
+  GOAL: [[ |- F/_ x A   |- F/_ y A ]] |- ran A = { y | E. x x A y }
+  STEP: dfrn2 {{ A : A }} {{ x : x }} {{ y : y }}
+THEOREM: ax12vOLDOLD
+GOAL: [[ ]] |- ( x = y -> ( ph -> A. x ( x = y -> ph ) ) )
+EXPANSIONS: 1
+  GOAL: [[ ]] |- ( x = y -> ( ph -> A. x ( x = y -> ph ) ) )
+  STEP: ax12v {{ ph : ph }} {{ x : x }} {{ y : y }}
+THEOREM: sbid2v
+GOAL: [[ ]] |- ( [ y / x ] [ x / y ] ph <-> ph )
+EXPANSIONS: 3
+  GOAL: [[ ]] |- F/ x ph
+  STEP: nfv {{ ph : ph }} {{ x : x }}
+  GOAL: [[ ]] |- ( x = y -> ( [ x / y ] ph <-> ph ) )
+  STEP: sbequ12r {{ ph : ph }} {{ x : x }} {{ y : y }}
+  GOAL: [[ ]] |- ( [ y / x ] [ x / y ] ph <-> ph )
+  STEP: sbie {{ ph : [ x / y ] ph }} {{ ps : ph }} {{ x : x }} {{ y : y }}
+THEOREM: rabswap
+GOAL: [[ ]] |- { x e. A | x e. B } = { x e. B | x e. A }
+EXPANSIONS: 5
+  GOAL: [[ ]] |- ( ( x e. A /\ x e. B ) <-> ( x e. B /\ x e. A ) )
+  STEP: ancom {{ ph : x e. A }} {{ ps : x e. B }}
+  GOAL: [[ ]] |- { x | ( x e. A /\ x e. B ) } = { x | ( x e. B /\ x e. A ) }
+  STEP: abbii {{ ph : ( x e. A /\ x e. B ) }} {{ ps : ( x e. B /\ x e. A ) }} {{ x : x }}
+  GOAL: [[ ]] |- { x e. A | x e. B } = { x | ( x e. A /\ x e. B ) }
+  STEP: df-rab {{ A : A }} {{ ph : x e. B }} {{ x : x }}
+  GOAL: [[ ]] |- { x e. B | x e. A } = { x | ( x e. B /\ x e. A ) }
+  STEP: df-rab {{ A : B }} {{ ph : x e. A }} {{ x : x }}
+  GOAL: [[ ]] |- { x e. A | x e. B } = { x e. B | x e. A }
+  STEP: 3eqtr4i {{ A : { x | ( x e. A /\ x e. B ) } }} {{ B : { x | ( x e. B /\ x e. A ) } }} {{ C : { x e. A | x e. B } }} {{ D : { x e. B | x e. A } }}
+THEOREM: nfaba1
+GOAL: [[ ]] |- F/_ x { y | A. x ph }
+EXPANSIONS: 2
+  GOAL: [[ ]] |- F/ x A. x ph
+  STEP: nfa1 {{ ph : ph }} {{ x : x }}
+  GOAL: [[ ]] |- F/_ x { y | A. x ph }
+  STEP: nfab {{ ph : A. x ph }} {{ x : x }} {{ y : y }}
+THEOREM: inf3
+GOAL: [[ |- E. x ( x =/= (/) /\ x C_ U. x ) ]] |- _om e. _V
+EXPANSIONS: 1
+  GOAL: [[ |- E. x ( x =/= (/) /\ x C_ U. x ) ]] |- _om e. _V
+  STEP: omex
+THEOREM: ax9v
+GOAL: [[ ]] |- ( x = y -> ( z e. x -> z e. y ) )
+EXPANSIONS: 1
+  GOAL: [[ ]] |- ( x = y -> ( z e. x -> z e. y ) )
+  STEP: ax9 {{ x : x }} {{ y : y }} {{ z : z }}
+THEOREM: in32
+GOAL: [[ ]] |- ( ( A i^i B ) i^i C ) = ( ( A i^i C ) i^i B )
+EXPANSIONS: 5
+  GOAL: [[ ]] |- ( B i^i C ) = ( C i^i B )
+  STEP: incom {{ A : B }} {{ B : C }}
+  GOAL: [[ ]] |- ( A i^i ( B i^i C ) ) = ( A i^i ( C i^i B ) )
+  STEP: ineq2i {{ A : ( B i^i C ) }} {{ B : ( C i^i B ) }} {{ C : A }}
+  GOAL: [[ ]] |- ( ( A i^i B ) i^i C ) = ( A i^i ( B i^i C ) )
+  STEP: inass {{ A : A }} {{ B : B }} {{ C : C }}
+  GOAL: [[ ]] |- ( ( A i^i C ) i^i B ) = ( A i^i ( C i^i B ) )
+  STEP: inass {{ A : A }} {{ B : C }} {{ C : B }}
+  GOAL: [[ ]] |- ( ( A i^i B ) i^i C ) = ( ( A i^i C ) i^i B )
+  STEP: 3eqtr4i {{ A : ( A i^i ( B i^i C ) ) }} {{ B : ( A i^i ( C i^i B ) ) }} {{ C : ( ( A i^i B ) i^i C ) }} {{ D : ( ( A i^i C ) i^i B ) }}
+THEOREM: merlem3
+GOAL: [[ ]] |- ( ( ( ps -> ch ) -> ph ) -> ( ch -> ph ) )
+EXPANSIONS: 2
+  GOAL: [[ ]] |- ( ch -> ( ps -> ch ) )
+  STEP: ax-1 {{ ph : ch }} {{ ps : ps }}
+  GOAL: [[ ]] |- ( ( ( ps -> ch ) -> ph ) -> ( ch -> ph ) )
+  STEP: imim1i {{ ch : ph }} {{ ph : ch }} {{ ps : ( ps -> ch ) }}
+THEOREM: nfra2
+GOAL: [[ ]] |- F/ y A. x e. A A. y e. B ph
+EXPANSIONS: 2
+  GOAL: [[ ]] |- F/ y e. A A. y e. B ph
+  STEP: nfv {{ ph : e. A A. y e. B ph }} {{ x : y }}
+  GOAL: [[ ]] |- F/ y A. x e. A A. y e. B ph
+  STEP: nfal {{ ph : e. A A. y e. B ph }} {{ x : y }} {{ y : x }}
+THEOREM: snsstp1
+GOAL: [[ ]] |- { A } C_ { A , B , C }
+EXPANSIONS: 1
+  GOAL: [[ ]] |- { A } C_ { A , B , C }
+  STEP: snsspr1 {{ A : A }} {{ B : B , C }}
+THEOREM: re2luk2
+GOAL: [[ ]] |- ( ( -. ph -> ph ) -> ph )
+EXPANSIONS: 3
+  GOAL: [[ ]] |- ( -. -. ph -> ph )
+  STEP: notnotr {{ ph : ph }}
+  GOAL: [[ ]] |- ( ph -> ph )
+  STEP: id {{ ph : ph }}
+  GOAL: [[ ]] |- ( ( -. ph -> ph ) -> ph )
+  STEP: ja {{ ch : ph }} {{ ph : -. ph }} {{ ps : ph }}
+THEOREM: simp2r3
+GOAL: [[ ]] |- ( ( ta /\ ( th /\ ( ph /\ ps /\ ch ) ) /\ et ) -> ch )
+EXPANSIONS: 2
+  GOAL: [[ ]] |- ( ( th /\ ( ph /\ ps /\ ch ) ) -> ch )
+  STEP: simpr3 {{ ch : ps }} {{ ph : th }} {{ ps : ph }} {{ th : ch }}
+  GOAL: [[ ]] |- ( ( ta /\ ( th /\ ( ph /\ ps /\ ch ) ) /\ et ) -> ch )
+  STEP: 3ad2ant2 {{ ch : ch }} {{ ph : ( th /\ ( ph /\ ps /\ ch ) ) }} {{ ps : ta }} {{ th : et }}
+THEOREM: ax10w
+GOAL: [[ |- ( x = y -> ( ph <-> ps ) ) ]] |- ( -. A. x ph -> A. x -. A. x ph )
+EXPANSIONS: 3
+  GOAL: [[ |- ( x = y -> ( ph <-> ps ) ) ]] |- ( ph -> A. x ph )
+  STEP: ax-5 {{ ph : ph }} {{ x : x }}
+  GOAL: [[ |- ( x = y -> ( ph <-> ps ) ) ]] |- ( A. x ph -> A. x A. x ph )
+  STEP: alimi {{ ph : ph }} {{ ps : A. x ph }} {{ x : x }}
+  GOAL: [[ |- ( x = y -> ( ph <-> ps ) ) ]] |- ( -. A. x ph -> A. x -. A. x ph )
+  STEP: hbn {{ ph : A. x ph }} {{ x : x }}
+THEOREM: fnexALT
+GOAL: [[ ]] |- ( ( F Fn A /\ A e. B ) -> F e. _V )
+EXPANSIONS: 1
+  GOAL: [[ ]] |- ( ( F Fn A /\ A e. B ) -> F e. _V )
+  STEP: fnex {{ A : A }} {{ B : B }} {{ F : F }}
+THEOREM: ficardid
+GOAL: [[ ]] |- ( A e. Fin -> ( card ` A ) ~~ A )
+EXPANSIONS: 3
+  GOAL: [[ ]] |- ( A e. Fin -> A e. dom card )
+  STEP: finnum {{ A : A }}
+  GOAL: [[ ]] |- ( A e. dom card -> ( card ` A ) ~~ A )
+  STEP: cardid2 {{ A : A }}
+  GOAL: [[ ]] |- ( A e. Fin -> ( card ` A ) ~~ A )
+  STEP: syl {{ ch : ( card ` A ) ~~ A }} {{ ph : A e. Fin }} {{ ps : A e. dom card }}
+THEOREM: simp11
+GOAL: [[ ]] |- ( ( ( ph /\ ps /\ ch ) /\ th /\ ta ) -> ph )
+EXPANSIONS: 1
+  GOAL: [[ ]] |- ( ( ( ph /\ ps /\ ch ) /\ th /\ ta ) -> ph )
+  STEP: simpl1 {{ ch : ch }} {{ ph : ph }} {{ ps : ps }} {{ th : th /\ ta }}
+THEOREM: fveq1
+GOAL: [[ ]] |- ( F = G -> ( F ` A ) = ( G ` A ) )
+EXPANSIONS: 1
+  GOAL: [[ ]] |- ( F = G -> ( F ` A ) = ( G ` A ) )
+  STEP: oveq1 {{ A : F }} {{ B : G }} {{ C : A }} {{ F : ` }}
+THEOREM: simp1l
+GOAL: [[ ]] |- ( ( ( ph /\ ps ) /\ ch /\ th ) -> ph )
+EXPANSIONS: 1
+  GOAL: [[ ]] |- ( ( ( ph /\ ps ) /\ ch /\ th ) -> ph )
+  STEP: simpll {{ ch : ch /\ th }} {{ ph : ph }} {{ ps : ps }}
+THEOREM: cleqh
+GOAL: [[ |- ( y e. A -> A. x y e. A )   |- ( y e. B -> A. x y e. B ) ]] |- ( A = B <-> A. x ( x e. A <-> x e. B ) )
+EXPANSIONS: 1
+  GOAL: [[ |- ( y e. A -> A. x y e. A )   |- ( y e. B -> A. x y e. B ) ]] |- ( A = B <-> A. x ( x e. A <-> x e. B ) )
+  STEP: dfcleq {{ A : A }} {{ B : B }} {{ x : x }}
+THEOREM: nfsbd
+GOAL: [[ |- F/ x ph   |- ( ph -> F/ z ps ) ]] |- ( ph -> F/ z [ y / x ] ps )
+EXPANSIONS: 1
+  GOAL: [[ |- F/ x ph   |- ( ph -> F/ z ps ) ]] |- ( ph -> F/ z [ y / x ] ps )
+  STEP: nfvd {{ ph : ph }} {{ ps : [ y / x ] ps }} {{ x : z }}
+THEOREM: stdpc5
+GOAL: [[ |- F/ x ph ]] |- ( A. x ( ph -> ps ) -> ( ph -> A. x ps ) )
+EXPANSIONS: 2
+  GOAL: [[ |- F/ x ph ]] |- ( A. x ( ph -> ps ) <-> ( ph -> A. x ps ) )
+  STEP: 19.21v {{ ph : ph }} {{ ps : ps }} {{ x : x }}
+  GOAL: [[ |- F/ x ph ]] |- ( A. x ( ph -> ps ) -> ( ph -> A. x ps ) )
+  STEP: biimpi {{ ph : A. x ( ph -> ps ) }} {{ ps : ( ph -> A. x ps ) }}
+THEOREM: euexALT
+GOAL: [[ ]] |- ( E! x ph -> E. x ph )
+EXPANSIONS: 1
+  GOAL: [[ ]] |- ( E! x ph -> E. x ph )
+  STEP: euex {{ ph : ph }} {{ x : x }}
