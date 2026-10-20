@@ -6,7 +6,6 @@ recording proved theorems and expansion counts.
 import argparse
 import heapq
 import importlib.util
-import itertools
 import json
 import os
 import sys
@@ -20,6 +19,7 @@ from utils.formatting import (
     parse_goal,
     parse_proofstep,
 )
+from utils.grammar import Grammar, make_scoped_mm
 from utils.matcher import (
     DEFAULT_CACHE,
     DEFAULT_CAP,
@@ -93,11 +93,20 @@ class MetamathVerifier:
 
     The core method is apply_step(goal_str, proofstep_str) which returns
     a list of new subgoal strings if the step is valid, or None if not.
+
     """
 
     def __init__(self, mmv, mm):
         self.mmv = mmv
         self.mm = mm
+        self.grammar = Grammar(mm)
+        self.position = {label: i for i, label in enumerate(mm.labels)}
+        self.target = None
+
+    def set_target(self, label: Optional[str]) -> None:
+        if label is not None and label not in self.mm.scopes:
+            raise KeyError(f"{label} is not a $p in the database")
+        self.target = label
 
     def apply_step(self, goal_str: str, proofstep_str: str) -> Optional[list[str]]:
         """
@@ -132,14 +141,14 @@ class MetamathVerifier:
             if substituted_result != goal["conclusion"]:
                 return None
 
-            for x, y in distinct:
-                if x not in subst or y not in subst:
-                    continue
-                x_vars = self.mm.find_vars(subst[x])
-                y_vars = self.mm.find_vars(subst[y])
-                for xv, yv in itertools.product(x_vars, y_vars):
-                    if xv == yv or not self.mm.fs.lookup_d(xv, yv):
-                        return None
+            if self.target is not None:
+                if self.position[label] >= self.position[self.target]:
+                    return None
+                scope = self.mm.scopes[self.target]
+            else:
+                scope = (None, None)
+            if self.grammar.step_violation(mand_var, distinct, subst, scope):
+                return None
 
             new_subgoals = []
             for h in hyp:
@@ -151,6 +160,11 @@ class MetamathVerifier:
 
         except Exception:
             return None
+
+
+# Step recorded for a goal closed by one of the theorem's own hypotheses.
+# "$e" can never be a database label, so it cannot collide with a theorem.
+HYPOTHESIS_STEP = "$e"
 
 
 @dataclass(order=True)
@@ -210,6 +224,28 @@ def proof_search(
     expansions = 0
     candidates_examined = 0
     valid_tactics_found = 0
+
+    def close_by_hypothesis(goal_str: str) -> bool:
+        # A goal identical to one of the theorem's own $e hypotheses is
+        # proved by citing that hypothesis; no theorem application can close it.
+        goal = parse_goal(goal_str)
+        if goal is None or goal["conclusion"] not in goal["e_hyps"]:
+            return False
+        proof_tree[goal_str] = [
+            {"step": HYPOTHESIS_STEP, "subgoals": [], "candidate_rank": 1}
+        ]
+        closed.add(goal_str)
+        return True
+
+    if close_by_hypothesis(root_goal_str):
+        metrics = {
+            "expansions": 0,
+            "candidates_examined": 0,
+            "valid_tactics_found": 0,
+            "search_time_s": time.time() - start_time,
+            "proved": True,
+        }
+        return proof_tree, metrics
 
     heap = []
     heapq.heappush(
@@ -333,7 +369,9 @@ def proof_search(
 
             child_logprob = entry.cumulative_logprob + step_logprob
             for subgoal in subgoals:
-                if subgoal not in closed and subgoal not in in_queue:
+                if subgoal in closed or close_by_hypothesis(subgoal):
+                    continue
+                if subgoal not in in_queue:
                     heapq.heappush(
                         heap,
                         GoalEntry(
@@ -389,7 +427,11 @@ def count_proof_steps(proof_tree: dict) -> int:
     """Count the total number of steps in a completed proof tree."""
     if proof_tree is None:
         return 0
-    return sum(1 + len(v["subgoals"]) for v in proof_tree.values())
+    return sum(
+        1 + len(v["subgoals"])
+        for v in proof_tree.values()
+        if v["step"] != HYPOTHESIS_STEP
+    )
 
 
 def extract_proof(root_goal: str, proof_tree: dict) -> Optional[dict]:
@@ -552,6 +594,7 @@ def evaluate(
         non_first_candidate_steps = 0
         max_candidate_rank = 0
 
+        verifier.set_target(label)
         for _ in range(attempts):
             attempts_used += 1
             proof_tree, metrics = proof_search(
@@ -929,7 +972,7 @@ def main(add_args=None, wrap_model=None, doc=None):
     mmv = load_mmverify(mmverify_path)
 
     print(f"Loading {args.mm} ...")
-    mm = mmv.MM()
+    mm = make_scoped_mm(mmv)()
     with open(args.mm, "r", encoding="utf-8", errors="replace") as f:
         mm.read(mmv.toks(f))
     print("Database loaded.")
