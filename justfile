@@ -34,17 +34,11 @@ common_args := "--base-model " + base_model + " --max-length " + max_length
 # finetune all the models
 finetune seed=seed:
   just finetune_baseline longest {{seed}}
-  just finetune_baseline shortest {{seed}}
   just finetune_modular_thm longest {{seed}}
-  just finetune_modular_thm shortest {{seed}}
   just finetune_modular_sub longest {{seed}}
-  just finetune_modular_sub shortest {{seed}}
   just finetune_residual_baseline longest {{seed}}
-  just finetune_residual_baseline shortest {{seed}}
   just finetune_residual_modular_thm longest {{seed}}
-  just finetune_residual_modular_thm shortest {{seed}}
   just finetune_residual_modular_sub longest {{seed}}
-  just finetune_residual_modular_sub shortest {{seed}}
 
 # (argument is either 'longest' or 'shortest')
 finetune_baseline size seed=seed:
@@ -109,13 +103,9 @@ finetune_residual_modular_sub size seed=seed:
 
 proof_search seed=seed:
   just proof_search_baseline longest {{seed}}
-  just proof_search_baseline shortest {{seed}}
   just proof_search_modular longest {{seed}}
-  just proof_search_modular shortest {{seed}}
   just proof_search_residual_baseline longest {{seed}}
-  just proof_search_residual_baseline shortest {{seed}}
   just proof_search_residual_modular longest {{seed}}
-  just proof_search_residual_modular shortest {{seed}}
 
 # (size argument is either 'longest' or 'shortest')
 proof_search_baseline size seed=seed:

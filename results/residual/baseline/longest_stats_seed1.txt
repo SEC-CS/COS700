@@ -1,0 +1,30 @@
+Results for: learned_model
+Seed                      : 1
+Theorem success rate      : 148/854 = 17.33%
+Avg search time (proved)  : 4.2473s
+Elapsed time              : 18913.92s
+Expansions used (proved)  : avg=6.1, max=32  (out of a budget of 32)
+Avg candidates examined   : 118.2 (over 842 theorems with any candidates)
+Avg proof length (steps)  : 5.7
+Tokens (all attempts)     : input=972439, output=6741576  (per theorem: 1138.7 in / 7894.1 out; per expansion: 43.0 in / 298.4 out)
+Theorems written to file  : 148 (fully closed proofs only -- results/residual/baseline/longest_theorems_proved_seed1.txt)
+
+{
+  "avg_candidates_examined": 118.2,
+  "avg_expansions_used": 6.1,
+  "avg_input_tokens_per_expansion": 43.0,
+  "avg_input_tokens_per_theorem": 1138.7,
+  "avg_output_tokens_per_expansion": 298.4,
+  "avg_output_tokens_per_theorem": 7894.1,
+  "avg_proof_steps": 5.7,
+  "avg_search_time_s": 4.2473,
+  "elapsed_time_s": 18913.92,
+  "max_expansions_used": 32,
+  "model": "learned_model",
+  "proved": 148,
+  "theorem_success_rate_%": 17.33,
+  "theorems_written_to_file": 148,
+  "total_input_tokens": 972439,
+  "total_output_tokens": 6741576,
+  "total_theorems": 854
+}
