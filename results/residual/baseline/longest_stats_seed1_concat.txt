@@ -1,0 +1,12 @@
+Results for: learned_model (test run + hyp run)
+Seed                      : 1
+Theorem success rate      : 187/854 = 21.90%  (test run, no hypotheses: 60/470; hyp run: 127/384)
+Avg search time (proved)  : test run n/a; hyp run 3.5489s
+Elapsed time              : test run 18913.92s; hyp run 6881.25s
+Expansions used (proved)  : avg=6.2, max=32  (out of a budget of 32)
+Expansions used (all)     : 19870 (test run, theorems without hypotheses: 11292; hyp run: 8578)
+Avg candidates examined   : test run 118.2 (over 842 theorems with any candidates); hyp run 107.1 (over 380 theorems with any candidates)
+Avg proof length (steps)  : 7.0
+Tokens (all attempts)     : input=877356, output=6153621  (per theorem: 1027.3 in / 7205.6 out; per expansion: 44.2 in / 309.7 out)
+Theorems written to file  : 187 (kernel-accepted proofs only -- results/residual/baseline/longest_theorems_proved_seed1_concat.txt)
+Sources                   : results/residual/baseline/longest_theorems_proved_seed1.txt (theorems without hypotheses) + results/residual/baseline/hyp/longest_theorems_proved_seed1.txt (theorems with hypotheses)
