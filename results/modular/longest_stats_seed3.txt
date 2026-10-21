@@ -1,29 +1,32 @@
 Results for: learned_model
 Seed                      : 3
-Theorem success rate      : 119/854 = 13.93%
-Avg search time (proved)  : 4.8598s
+Theorem success rate      : 57/854 = 6.67%
+Avg search time (proved)  : n/a (per-theorem search times were not saved)
 Elapsed time              : 21546.57s
-Expansions used (proved)  : avg=5.5, max=32  (out of a budget of 32)
+Expansions used (proved)  : avg=4.6, max=21  (out of a budget of 32)
 Avg candidates examined   : 138.8 (over 854 theorems with any candidates)
-Avg proof length (steps)  : 5.0
+Avg proof length (steps)  : 5.3
 Tokens (all attempts)     : input=9748612, output=21694972  (per theorem: 11415.2 in / 25403.9 out; per expansion: 433.3 in / 964.3 out)
-Theorems written to file  : 119 (fully closed proofs only -- results/modular/longest_theorems_proved_seed3.txt)
+Theorems written to file  : 57 (fully closed proofs only -- results/modular/longest_theorems_proved_seed3.txt)
+Kernel check              : 57/119 proofs accepted by mmverify; 62 rejected (verdicts in results/modular/longest_kernel_seed3.json). Proofs rebuilt without dead branches. Search-cost figures (elapsed, candidates, tokens) are for the original run.
 
 {
   "avg_candidates_examined": 138.8,
-  "avg_expansions_used": 5.5,
+  "avg_expansions_used": 4.6,
   "avg_input_tokens_per_expansion": 433.3,
   "avg_input_tokens_per_theorem": 11415.2,
   "avg_output_tokens_per_expansion": 964.3,
   "avg_output_tokens_per_theorem": 25403.9,
-  "avg_proof_steps": 5.0,
-  "avg_search_time_s": 4.8598,
+  "avg_proof_steps": 5.3,
+  "avg_search_time_s": null,
   "elapsed_time_s": 21546.57,
-  "max_expansions_used": 32,
+  "kernel_rejected": 62,
+  "max_expansions_used": 21,
   "model": "learned_model",
-  "proved": 119,
-  "theorem_success_rate_%": 13.93,
-  "theorems_written_to_file": 119,
+  "proved": 57,
+  "proved_before_kernel_check": 119,
+  "theorem_success_rate_%": 6.67,
+  "theorems_written_to_file": 57,
   "total_input_tokens": 9748612,
   "total_output_tokens": 21694972,
   "total_theorems": 854

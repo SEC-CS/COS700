@@ -436,31 +436,36 @@ def count_proof_steps(proof_tree: dict) -> int:
 
 def extract_proof(root_goal: str, proof_tree: dict) -> Optional[dict]:
     """
-    Extracts a clean {goal: {step, subgoals}} tree top-down from root_goal,
-    picking the alternative derivation whose subgoals are fully provable.
+    Extracts a clean {goal: {step, subgoals}} tree from root_goal, holding
+    only the goals its proof uses, subgoals before the goals they prove.
+
     """
-    clean = {}
-    memo = {}
+    chosen = {}
+    changed = True
+    while changed:
+        changed = False
+        for goal, alternatives in proof_tree.items():
+            if goal in chosen:
+                continue
+            for alt in alternatives:
+                if all(subgoal in chosen for subgoal in alt["subgoals"]):
+                    chosen[goal] = alt
+                    changed = True
+                    break
 
-    def provable(goal: str, visiting: set) -> bool:
-        if goal in memo:
-            return memo[goal]
-        if goal not in proof_tree or goal in visiting:
-            memo[goal] = False
-            return False
-        visiting.add(goal)
-        for alt in proof_tree[goal]:
-            if all(provable(sg, visiting) for sg in alt["subgoals"]):
-                clean[goal] = alt
-                visiting.discard(goal)
-                memo[goal] = True
-                return True
-        visiting.discard(goal)
-        memo[goal] = False
-        return False
-
-    if not provable(root_goal, set()):
+    if root_goal not in chosen:
         return None
+
+    clean = {}
+
+    def collect(goal: str) -> None:
+        if goal in clean:
+            return
+        for subgoal in chosen[goal]["subgoals"]:
+            collect(subgoal)
+        clean[goal] = chosen[goal]
+
+    collect(root_goal)
     return clean
 
 

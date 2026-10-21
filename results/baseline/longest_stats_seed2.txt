@@ -1,29 +1,32 @@
 Results for: learned_model
 Seed                      : 2
-Theorem success rate      : 137/854 = 16.04%
-Avg search time (proved)  : 8.0127s
+Theorem success rate      : 58/854 = 6.79%
+Avg search time (proved)  : n/a (per-theorem search times were not saved)
 Elapsed time              : 29548.07s
-Expansions used (proved)  : avg=6.8, max=32  (out of a budget of 32)
+Expansions used (proved)  : avg=6.3, max=31  (out of a budget of 32)
 Avg candidates examined   : 153.6 (over 844 theorems with any candidates)
-Avg proof length (steps)  : 5.9
+Avg proof length (steps)  : 6.2
 Tokens (all attempts)     : input=964670, output=22490054  (per theorem: 1129.6 in / 26335.0 out; per expansion: 42.1 in / 981.4 out)
-Theorems written to file  : 137 (fully closed proofs only -- results/baseline/longest_theorems_proved_seed2.txt)
+Theorems written to file  : 58 (fully closed proofs only -- results/baseline/longest_theorems_proved_seed2.txt)
+Kernel check              : 58/137 proofs accepted by mmverify; 79 rejected (verdicts in results/baseline/longest_kernel_seed2.json). Proofs rebuilt without dead branches. Search-cost figures (elapsed, candidates, tokens) are for the original run.
 
 {
   "avg_candidates_examined": 153.6,
-  "avg_expansions_used": 6.8,
+  "avg_expansions_used": 6.3,
   "avg_input_tokens_per_expansion": 42.1,
   "avg_input_tokens_per_theorem": 1129.6,
   "avg_output_tokens_per_expansion": 981.4,
   "avg_output_tokens_per_theorem": 26335.0,
-  "avg_proof_steps": 5.9,
-  "avg_search_time_s": 8.0127,
+  "avg_proof_steps": 6.2,
+  "avg_search_time_s": null,
   "elapsed_time_s": 29548.07,
-  "max_expansions_used": 32,
+  "kernel_rejected": 79,
+  "max_expansions_used": 31,
   "model": "learned_model",
-  "proved": 137,
-  "theorem_success_rate_%": 16.04,
-  "theorems_written_to_file": 137,
+  "proved": 58,
+  "proved_before_kernel_check": 137,
+  "theorem_success_rate_%": 6.79,
+  "theorems_written_to_file": 58,
   "total_input_tokens": 964670,
   "total_output_tokens": 22490054,
   "total_theorems": 854
